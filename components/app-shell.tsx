@@ -73,19 +73,22 @@ function Header() {
         paddingTop: "env(safe-area-inset-top)",
       }}
     >
-      <div className="mx-auto max-w-[1120px] px-4 sm:px-5 py-3 flex items-center gap-2 sm:gap-3">
+      <div className="mx-auto max-w-[1120px] px-3 sm:px-5 py-3 flex items-center gap-1.5 sm:gap-3">
         <Link
           href="/resumen"
-          className="flex items-baseline gap-2 mr-auto no-underline min-w-0"
+          className="flex items-baseline gap-2 no-underline shrink-0"
         >
           <span
-            className="font-serif text-[18px] sm:text-[22px] font-bold tracking-tight truncate"
+            className="font-serif text-[18px] sm:text-[22px] font-bold tracking-tight whitespace-nowrap"
             style={{ color: "var(--ink)" }}
           >
-            Plata en Orden
+            <span className="sm:hidden">Plata</span>
+            <span className="hidden sm:inline">Plata en Orden</span>
             <span style={{ color: "var(--accent)" }}>.</span>
           </span>
         </Link>
+        <div className="flex-1" />
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
 
         <MesPopover
           value={settings.mes}
@@ -103,6 +106,7 @@ function Header() {
           value={settings.theme}
           onChange={(theme) => updateSettings({ theme })}
         />
+        </div>
       </div>
     </header>
   );
@@ -112,8 +116,12 @@ function Tabs() {
   const pathname = usePathname();
   return (
     <nav
-      className="mx-auto max-w-[1120px] px-4 sm:px-5 flex gap-1 overflow-x-auto no-scrollbar"
-      style={{ borderBottom: "1px solid var(--line)" }}
+      className="mx-auto max-w-[1120px] px-4 sm:px-5 flex gap-1 no-scrollbar"
+      style={{
+        borderBottom: "1px solid var(--line)",
+        overflowX: "auto",
+        overflowY: "hidden",
+      }}
     >
       {TABS.map((t) => {
         const Icon = t.icon;
@@ -177,7 +185,7 @@ function Popover({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="h-9 flex items-center gap-2 rounded-[10px] px-3 text-sm font-medium transition"
+        className="h-9 flex items-center gap-1.5 rounded-[10px] px-2.5 sm:px-3 text-[13px] sm:text-sm font-medium transition whitespace-nowrap"
         style={{
           background: open ? "var(--accent-soft)" : "var(--surface)",
           border: `1px solid ${open ? "var(--accent)" : "var(--line)"}`,
@@ -211,8 +219,8 @@ function MesPopover({
   onChange: (mes: string) => void;
 }) {
   const [year, month] = value.split("-").map(Number);
-  const short = labelMes(value).replace(/(\d+)/, "'$1").slice(0, 3) +
-    " " + String(year).slice(2);
+  const nombreCorto = labelMes(value).slice(0, 3);
+  const short = `${nombreCorto} '${String(year).slice(2)}`;
 
   const now = new Date();
   const currentYm = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;

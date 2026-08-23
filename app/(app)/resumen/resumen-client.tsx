@@ -342,26 +342,31 @@ function Bar({
 }) {
   const w = Math.max(3, (value / (max || 1)) * 100);
   return (
-    <div className="flex items-center gap-3 text-sm">
+    <div className="flex flex-col gap-1.5 text-sm">
+      <div className="flex items-baseline gap-3">
+        <span
+          className="truncate flex-1 min-w-0"
+          style={{ color: "var(--ink-soft)" }}
+          title={label}
+        >
+          {label}
+        </span>
+        <span
+          className="mono text-right whitespace-nowrap"
+          style={{ color: "var(--ink)" }}
+        >
+          {format(value)}
+          <span style={{ color: "var(--ink-faint)" }}>{suffix}</span>
+        </span>
+      </div>
       <span
-        className="w-40 truncate"
-        style={{ color: "var(--ink-soft)" }}
-        title={label}
-      >
-        {label}
-      </span>
-      <span
-        className="flex-1 h-2 rounded-full overflow-hidden"
+        className="block w-full h-2 rounded-full overflow-hidden"
         style={{ background: "var(--surface-2)" }}
       >
         <span
-          className="block h-full"
+          className="block h-full transition-all"
           style={{ width: `${w}%`, background: color }}
         />
-      </span>
-      <span className="mono w-32 text-right" style={{ color: "var(--ink)" }}>
-        {format(value)}
-        {suffix}
       </span>
     </div>
   );
