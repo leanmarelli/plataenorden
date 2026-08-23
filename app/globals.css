@@ -1,0 +1,181 @@
+@import "tailwindcss";
+
+/* Tokens heredados de la versión anterior (paleta papel/verde) */
+@theme {
+  --font-sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-serif: "Fraunces", Georgia, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+
+:root {
+  --paper: #f3f5f2;
+  --surface: #ffffff;
+  --surface-2: #eef1ec;
+  --line: #dfe4dc;
+  --ink: #15211c;
+  --ink-soft: #4c5a52;
+  --ink-faint: #78867d;
+  --accent: #0e6e5c;
+  --accent-soft: #d8ebe5;
+  --accent-ink: #0a4d41;
+  --pos: #2f7d57;
+  --pos-soft: #dcefe2;
+  --neg: #c0492f;
+  --neg-soft: #f6e0d9;
+  --warn: #a9791a;
+  --warn-soft: #f4e9cf;
+  --ars: #2f6ea5;
+  --ars-soft: #dde8f3;
+  --usd: #2f7d57;
+  --usd-soft: #dcefe2;
+  --shadow: 0 1px 2px rgba(20, 40, 32, 0.05), 0 6px 20px rgba(20, 40, 32, 0.06);
+  --radius: 14px;
+  --radius-sm: 9px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e1512;
+    --surface: #161f1b;
+    --surface-2: #1d2823;
+    --line: #2a352f;
+    --ink: #e8ede9;
+    --ink-soft: #a6b2aa;
+    --ink-faint: #7c8880;
+    --accent: #3bb197;
+    --accent-soft: #173a33;
+    --accent-ink: #8fe0cf;
+    --pos: #4cbf85;
+    --pos-soft: #153426;
+    --neg: #e8836b;
+    --neg-soft: #3a201a;
+    --warn: #d7a94a;
+    --warn-soft: #352a14;
+    --ars: #6aa6dd;
+    --ars-soft: #17293a;
+    --usd: #4cbf85;
+    --usd-soft: #153426;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 26px rgba(0, 0, 0, 0.35);
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper: #0e1512;
+  --surface: #161f1b;
+  --surface-2: #1d2823;
+  --line: #2a352f;
+  --ink: #e8ede9;
+  --ink-soft: #a6b2aa;
+  --ink-faint: #7c8880;
+  --accent: #3bb197;
+  --accent-soft: #173a33;
+  --accent-ink: #8fe0cf;
+  --pos: #4cbf85;
+  --pos-soft: #153426;
+  --neg: #e8836b;
+  --neg-soft: #3a201a;
+  --warn: #d7a94a;
+  --warn-soft: #352a14;
+  --ars: #6aa6dd;
+  --ars-soft: #17293a;
+  --usd: #4cbf85;
+  --usd-soft: #153426;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 26px rgba(0, 0, 0, 0.35);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  margin: 0;
+  text-wrap: balance;
+  letter-spacing: -0.01em;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Utilities re-usadas de la versión anterior */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  transition: 0.15s;
+}
+
+.btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.btn-primary:hover {
+  background: var(--accent-ink);
+  border-color: var(--accent-ink);
+  color: white;
+}
+
+.input {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+  transition: 0.15s;
+}
+
+.input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+  font-weight: 600;
+  margin-bottom: 4px;
+  display: block;
+}
