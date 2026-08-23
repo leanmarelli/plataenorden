@@ -94,7 +94,7 @@ function Header() {
           value={settings.mes}
           onChange={(mes) => updateSettings({ mes })}
         />
-        <TcPopover
+        <TcInput
           value={settings.tc_ref}
           onChange={(tc_ref) => updateSettings({ tc_ref })}
         />
@@ -323,8 +323,8 @@ function YearMonthGrid({
   );
 }
 
-/* ─────────── TC popover ─────────── */
-function TcPopover({
+/* ─────────── TC inline input ─────────── */
+function TcInput({
   value,
   onChange,
 }: {
@@ -332,81 +332,53 @@ function TcPopover({
   onChange: (tc: number) => void;
 }) {
   const [draft, setDraft] = useState(String(value));
+  const [focused, setFocused] = useState(false);
+
+  // Sincronizar cuando el valor cambia desde afuera (otro dispositivo)
+  useEffect(() => {
+    if (!focused) setDraft(String(value));
+  }, [value, focused]);
+
+  function commit() {
+    const n = Number(draft);
+    if (Number.isFinite(n) && n > 0 && n !== value) onChange(n);
+    else setDraft(String(value));
+  }
 
   return (
-    <Popover
-      trigger={() => (
-        <>
-          <DollarSign size={14} />
-          <span className="mono">{value}</span>
-        </>
-      )}
+    <label
+      className="h-9 flex items-center gap-1 rounded-[10px] px-2.5 sm:px-3 transition"
+      style={{
+        background: focused ? "var(--accent-soft)" : "var(--surface)",
+        border: `1px solid ${focused ? "var(--accent)" : "var(--line)"}`,
+        color: focused ? "var(--accent-ink)" : "var(--ink)",
+        boxShadow: "var(--shadow)",
+      }}
     >
-      {(close) => (
-        <div>
-          <div
-            className="text-xs uppercase tracking-wider mb-2 font-semibold"
-            style={{ color: "var(--ink-faint)" }}
-          >
-            Tipo de cambio de referencia
-          </div>
-          <div className="flex items-center gap-2 mb-2">
-            <div
-              className="w-9 h-9 grid place-items-center rounded-lg"
-              style={{
-                background: "var(--accent-soft)",
-                color: "var(--accent-ink)",
-              }}
-            >
-              <DollarSign size={16} />
-            </div>
-            <input
-              type="number"
-              inputMode="numeric"
-              className="input mono flex-1"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              autoFocus
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  const n = Number(draft);
-                  if (Number.isFinite(n) && n > 0) onChange(n);
-                  close();
-                }
-              }}
-            />
-          </div>
-          <div
-            className="text-xs mb-3"
-            style={{ color: "var(--ink-faint)" }}
-          >
-            1 USD = {draft || "?"} ARS
-          </div>
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              className="btn"
-              onClick={close}
-              style={{ padding: "6px 12px" }}
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => {
-                const n = Number(draft);
-                if (Number.isFinite(n) && n > 0) onChange(n);
-                close();
-              }}
-              style={{ padding: "6px 12px" }}
-            >
-              Guardar
-            </button>
-          </div>
-        </div>
-      )}
-    </Popover>
+      <DollarSign size={14} />
+      <input
+        type="number"
+        inputMode="numeric"
+        min={1}
+        step={1}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onFocus={(e) => {
+          setFocused(true);
+          e.target.select();
+        }}
+        onBlur={() => {
+          setFocused(false);
+          commit();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        }}
+        className="mono bg-transparent border-0 outline-none text-[13px] sm:text-sm font-medium w-[54px] sm:w-[64px] text-left"
+        style={{ color: "inherit" }}
+        aria-label="Tipo de cambio de referencia (ARS por USD)"
+      />
+    </label>
   );
 }
 

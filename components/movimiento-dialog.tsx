@@ -160,52 +160,39 @@ export default function MovimientoDialog({
     >
       {local && (
         <div className="flex flex-col gap-3">
-          <div className="grid gap-3 grid-cols-2">
-            <Field label="Fecha">
-              <input
-                type="date"
-                className="input"
-                value={local.fecha}
-                onChange={(e) => setLocal({ ...local, fecha: e.target.value })}
-              />
-            </Field>
-            <Field label="Tipo">
-              <select
-                className="input"
-                value={local.tipo}
-                onChange={(e) => {
-                  const tipo = e.target.value as MovTipo;
-                  setLocal({ ...local, tipo, cat: catsFor(tipo)[0] });
-                }}
-              >
-                <option>Gasto</option>
-                <option>Ingreso</option>
-                <option>Ahorro</option>
-              </select>
-            </Field>
-          </div>
-          <Field label="Categoría">
-            <select
-              className="input"
-              value={local.cat}
-              onChange={(e) => setLocal({ ...local, cat: e.target.value })}
+          {/* Tipo como pill toggle — más rápido que un select */}
+          <Field label="Tipo">
+            <div
+              className="grid grid-cols-3 rounded-[10px] p-[3px] gap-[2px]"
+              style={{
+                background: "var(--surface-2)",
+                border: "1px solid var(--line)",
+              }}
             >
-              {catsFor(local.tipo).map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
+              {(["Gasto", "Ingreso", "Ahorro"] as MovTipo[]).map((t) => {
+                const active = local.tipo === t;
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() =>
+                      setLocal({ ...local, tipo: t, cat: catsFor(t)[0] })
+                    }
+                    className="py-2 text-sm font-semibold rounded-[7px] transition"
+                    style={{
+                      background: active ? "var(--surface)" : "transparent",
+                      color: active ? "var(--ink)" : "var(--ink-soft)",
+                      boxShadow: active ? "var(--shadow)" : "none",
+                    }}
+                  >
+                    {t}
+                  </button>
+                );
+              })}
+            </div>
           </Field>
-          <Field label="Descripción">
-            <input
-              className="input"
-              value={local.descripcion}
-              onChange={(e) =>
-                setLocal({ ...local, descripcion: e.target.value })
-              }
-              placeholder="ej. sueldo agosto, alquiler depto…"
-            />
-          </Field>
-          <div className="grid gap-3 grid-cols-3">
+
+          <div className="grid gap-3 grid-cols-2">
             <Field label="Moneda">
               <select
                 className="input"
@@ -227,21 +214,44 @@ export default function MovimientoDialog({
                 step="0.01"
                 value={local.monto}
                 onChange={(e) => setLocal({ ...local, monto: e.target.value })}
-              />
-            </Field>
-            <Field label="TC">
-              <input
-                className="input mono"
-                type="number"
-                inputMode="numeric"
-                min={0}
-                step={1}
-                value={local.tc}
-                onChange={(e) => setLocal({ ...local, tc: e.target.value })}
+                placeholder="0"
+                autoFocus
               />
             </Field>
           </div>
-          <div className="grid gap-3 grid-cols-3">
+
+          <Field label="Categoría">
+            <select
+              className="input"
+              value={local.cat}
+              onChange={(e) => setLocal({ ...local, cat: e.target.value })}
+            >
+              {catsFor(local.tipo).map((c) => (
+                <option key={c}>{c}</option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Descripción">
+            <input
+              className="input"
+              value={local.descripcion}
+              onChange={(e) =>
+                setLocal({ ...local, descripcion: e.target.value })
+              }
+              placeholder="ej. sueldo agosto, alquiler depto…"
+            />
+          </Field>
+
+          <div className="grid gap-3 grid-cols-2">
+            <Field label="Fecha">
+              <input
+                type="date"
+                className="input"
+                value={local.fecha}
+                onChange={(e) => setLocal({ ...local, fecha: e.target.value })}
+              />
+            </Field>
             <Field label="Medio">
               <select
                 className="input"
@@ -253,6 +263,9 @@ export default function MovimientoDialog({
                 ))}
               </select>
             </Field>
+          </div>
+
+          <div className="grid gap-3 grid-cols-2">
             <Field label="Fijo/Variable">
               <select
                 className="input"
@@ -278,6 +291,21 @@ export default function MovimientoDialog({
               </select>
             </Field>
           </div>
+
+          {/* TC solo visible si es USD (relevante) */}
+          {local.mon === "USD" && (
+            <Field label="Tipo de cambio (ARS por USD)">
+              <input
+                className="input mono"
+                type="number"
+                inputMode="numeric"
+                min={0}
+                step={1}
+                value={local.tc}
+                onChange={(e) => setLocal({ ...local, tc: e.target.value })}
+              />
+            </Field>
+          )}
 
           <div className="flex justify-end gap-2 mt-2">
             <button className="btn" onClick={onClose} type="button">

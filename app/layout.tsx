@@ -5,6 +5,11 @@ export const metadata: Metadata = {
   title: "Plata en Orden",
   description:
     "Finanzas personales en pesos y dólares: gastos, ahorro, viajes y conversiones, con sync en la nube.",
+  applicationName: "Plata en Orden",
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/apple-icon", sizes: "180x180", type: "image/png" }],
+  },
   appleWebApp: {
     capable: true,
     title: "Plata",
