@@ -1,6 +1,16 @@
 "use client";
 
 import { useMemo } from "react";
+import {
+  Wallet,
+  Receipt,
+  PiggyBank,
+  Scale,
+  Clock,
+  Lock,
+  Target,
+  type LucideIcon,
+} from "lucide-react";
 import { useSettings } from "@/components/settings-context";
 import type { Fijo, Meta, Movimiento } from "@/types/database";
 import {
@@ -12,6 +22,7 @@ import {
   usdOf,
 } from "@/lib/calc";
 import { fmtARS, fmtUSD, money, pct } from "@/lib/format";
+import EmptyState from "@/components/empty-state";
 
 const KPI_STYLES: Record<
   string,
@@ -72,7 +83,8 @@ export default function ResumenClient({
     return [
       {
         c: "pos",
-        lab: "💵 Ingresos confirmados",
+        Icon: Wallet,
+        lab: "Ingresos confirmados",
         a: ingConfA,
         u: ingConfU,
         meta:
@@ -82,40 +94,45 @@ export default function ResumenClient({
       },
       {
         c: "neg",
-        lab: "🧾 Gastos",
+        Icon: Receipt,
+        lab: "Gastos",
         a: gasA,
         u: gasU,
-        meta: `${nMov} movimientos`,
+        meta: `${nMov} movimiento${nMov === 1 ? "" : "s"}`,
       },
       {
         c: "save",
-        lab: "🐖 Ahorro del mes",
+        Icon: PiggyBank,
+        lab: "Ahorro del mes",
         a: ahoA,
         u: ahoU,
         meta: `tasa de ahorro ${pct(tasa)}`,
       },
       {
         c: balA >= 0 ? "blue" : "neg",
-        lab: "⚖️ Balance del mes",
+        Icon: Scale,
+        lab: "Balance del mes",
         a: balA,
         u: balU,
         meta: balA >= 0 ? "te queda a favor" : "gastaste de más",
       },
       {
         c: "warnk",
-        lab: "📌 Por cobrar (pendiente)",
+        Icon: Clock,
+        lab: "Por cobrar",
         a: pendA,
         u: pendU,
-        meta: "ingresos aún no confirmados",
+        meta: "ingresos pendientes",
       },
       {
         c: "save",
-        lab: "🔒 Comprometido en fijos",
+        Icon: Lock,
+        lab: "Comprometido en fijos",
         a: fijMensA,
         u: fijMensA / tcRef,
         meta: `${pct(compromiso)} de tu ingreso`,
       },
-    ];
+    ] satisfies { c: string; Icon: LucideIcon; lab: string; a: number; u: number; meta: string }[];
   }, [movimientos, fijos, mes, cur, tcRef]);
 
   const cats = useMemo(() => {
@@ -163,22 +180,39 @@ export default function ResumenClient({
   return (
     <div className="flex flex-col gap-6">
       {/* KPIs */}
-      <section className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+      <section className="grid gap-3 grid-cols-2 lg:grid-cols-3">
         {kpis.map((k, i) => {
           const s = KPI_STYLES[k.c];
+          const Icon = k.Icon;
           return (
             <div
               key={i}
-              className="card p-4 flex flex-col gap-1"
+              className="card p-4 flex flex-col gap-1.5"
               style={{ borderLeft: `3px solid ${s.ring}` }}
             >
-              <div
-                className="text-xs uppercase tracking-wider font-semibold"
-                style={{ color: "var(--ink-faint)" }}
-              >
-                {k.lab}
+              <div className="flex items-center justify-between">
+                <span
+                  className="text-[11px] sm:text-xs uppercase tracking-wider font-semibold"
+                  style={{ color: "var(--ink-faint)" }}
+                >
+                  {k.lab}
+                </span>
+                <span
+                  className="grid place-items-center rounded-lg"
+                  style={{
+                    width: 28,
+                    height: 28,
+                    background: s.bg,
+                    color: s.fg,
+                  }}
+                >
+                  <Icon size={15} strokeWidth={2.2} />
+                </span>
               </div>
-              <div className="mono font-serif text-2xl font-bold" style={{ color: s.fg }}>
+              <div
+                className="mono font-serif text-xl sm:text-2xl font-bold"
+                style={{ color: s.fg }}
+              >
                 {money(cur, k.a, k.u)}
               </div>
               <div className="text-xs" style={{ color: "var(--ink-soft)" }}>

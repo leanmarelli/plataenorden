@@ -5,12 +5,18 @@ export const metadata: Metadata = {
   title: "Plata en Orden",
   description:
     "Finanzas personales en pesos y dólares: gastos, ahorro, viajes y conversiones, con sync en la nube.",
+  appleWebApp: {
+    capable: true,
+    title: "Plata",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export const viewport: Viewport = {
   themeColor: "#0e6e5c",
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

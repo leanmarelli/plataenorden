@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Pencil, Trash2, Plus, ArrowLeftRight, ArrowRight } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { useToast } from "@/components/toast-provider";
 import PageHeader from "@/components/page-header";
+import EmptyState from "@/components/empty-state";
 import Modal from "@/components/modal";
 import type { Conversion, Moneda } from "@/types/database";
 import { fmtARS, fmtNum, fmtUSD2 } from "@/lib/format";
@@ -33,6 +36,7 @@ export default function ConversionesClient({
 }) {
   const router = useRouter();
   const supabase = createSupabaseBrowserClient();
+  const { toast } = useToast();
   const [rows, setRows] = useState<Conversion[]>(initial);
   const [modal, setModal] = useState<Form | null>(null);
   const [saving, setSaving] = useState(false);
@@ -53,11 +57,11 @@ export default function ConversionesClient({
     const md = Number(modal.monto_de);
     const ma = Number(modal.monto_a);
     if (modal.de === modal.a)
-      return alert("Las monedas de origen y destino deben ser diferentes");
+      return toast("Elegí monedas de origen y destino distintas", "error");
     if (!Number.isFinite(md) || md <= 0)
-      return alert("Monto de origen inválido");
+      return toast("Monto de origen inválido", "error");
     if (!Number.isFinite(ma) || ma <= 0)
-      return alert("Monto de destino inválido");
+      return toast("Monto de destino inválido", "error");
     setSaving(true);
     const payload = {
       fecha: modal.fecha,
@@ -74,41 +78,55 @@ export default function ConversionesClient({
         .select()
         .single();
       setSaving(false);
-      if (error) return alert(error.message);
+      if (error) return toast(error.message, "error");
       setRows((rs) =>
         rs.map((r) => (r.id === modal.id ? (data as Conversion) : r)),
       );
+      toast("Conversión actualizada", "success");
     } else {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) return alert("Sesión expirada");
+      if (!user) {
+        setSaving(false);
+        return toast("Sesión expirada", "error");
+      }
       const { data, error } = await supabase
         .from("conversiones")
         .insert({ ...payload, user_id: user.id })
         .select()
         .single();
       setSaving(false);
-      if (error) return alert(error.message);
+      if (error) return toast(error.message, "error");
       setRows((rs) => [data as Conversion, ...rs]);
+      toast("Conversión agregada", "success");
     }
     setModal(null);
     router.refresh();
   }
 
-  async function remove(id: string) {
+  async function remove(c: Conversion) {
     if (!confirm("¿Borrar esta conversión?")) return;
     const prev = rows;
-    setRows((rs) => rs.filter((r) => r.id !== id));
-    const { error } = await supabase.from("conversiones").delete().eq("id", id);
+    setRows((rs) => rs.filter((r) => r.id !== c.id));
+    const { error } = await supabase
+      .from("conversiones")
+      .delete()
+      .eq("id", c.id);
     if (error) {
-      alert(error.message);
+      toast(error.message, "error");
       setRows(prev);
+    } else {
+      toast("Conversión borrada", "success");
     }
   }
 
   function fmt(mon: Moneda, val: number) {
     return mon === "USD" ? fmtUSD2.format(val) : fmtARS.format(val);
+  }
+
+  function implicitTc(c: Conversion) {
+    return c.de === "ARS" ? c.monto_de / c.monto_a : c.monto_a / c.monto_de;
   }
 
   return (
@@ -118,79 +136,118 @@ export default function ConversionesClient({
         subtitle="compra/venta de dólares y otros cambios"
         action={
           <button className="btn btn-primary" onClick={() => setModal(empty)}>
-            + Nueva conversión
+            <Plus size={16} /> Nueva
           </button>
         }
       />
-      <div className="card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr
-              className="text-xs uppercase tracking-wider"
-              style={{ color: "var(--ink-faint)" }}
-            >
-              <th className="text-left px-3 py-2">Fecha</th>
-              <th className="text-left px-3 py-2">De</th>
-              <th className="text-right px-3 py-2">Monto origen</th>
-              <th className="text-left px-3 py-2">A</th>
-              <th className="text-right px-3 py-2">Monto destino</th>
-              <th className="text-right px-3 py-2">Tipo de cambio implícito</th>
-              <th className="px-3 py-2" />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 && (
-              <tr>
-                <td
-                  colSpan={7}
-                  className="text-center py-8"
-                  style={{ color: "var(--ink-faint)" }}
-                >
-                  Sin conversiones cargadas.
-                </td>
-              </tr>
-            )}
+
+      {rows.length === 0 ? (
+        <div className="card">
+          <EmptyState
+            icon={ArrowLeftRight}
+            title="Sin conversiones cargadas"
+            description="Anotá cada compra/venta de dólares y guardá el tipo de cambio implícito."
+            action={
+              <button className="btn btn-primary" onClick={() => setModal(empty)}>
+                <Plus size={16} /> Nueva conversión
+              </button>
+            }
+          />
+        </div>
+      ) : (
+        <>
+          {/* Mobile */}
+          <div className="card sm:hidden">
             {rows.map((r) => {
-              const tc =
-                r.de === "ARS"
-                  ? r.monto_de / r.monto_a
-                  : r.monto_a / r.monto_de;
+              const tc = implicitTc(r);
               return (
-                <tr key={r.id} style={{ borderTop: "1px solid var(--line)" }}>
-                  <td className="px-3 py-2 mono">{r.fecha}</td>
-                  <td className="px-3 py-2">{r.de}</td>
-                  <td className="px-3 py-2 mono text-right whitespace-nowrap">
-                    {fmt(r.de, r.monto_de)}
-                  </td>
-                  <td className="px-3 py-2">{r.a}</td>
-                  <td className="px-3 py-2 mono text-right whitespace-nowrap">
-                    {fmt(r.a, r.monto_a)}
-                  </td>
-                  <td className="px-3 py-2 mono text-right">
-                    {fmtNum.format(tc)}
-                  </td>
-                  <td className="px-3 py-2 text-right whitespace-nowrap">
-                    <button
-                      className="text-sm mr-2"
-                      onClick={() => openEdit(r)}
-                      style={{ color: "var(--accent)" }}
-                    >
-                      Editar
-                    </button>
-                    <button
-                      className="text-sm"
-                      onClick={() => remove(r.id)}
-                      style={{ color: "var(--neg)" }}
-                    >
-                      Borrar
-                    </button>
-                  </td>
-                </tr>
+                <button
+                  key={r.id}
+                  className="data-row w-full text-left active:opacity-70"
+                  onClick={() => openEdit(r)}
+                  type="button"
+                >
+                  <div
+                    className="data-row-icon"
+                    style={{
+                      background: "var(--accent-soft)",
+                      color: "var(--accent-ink)",
+                    }}
+                  >
+                    <ArrowLeftRight size={18} />
+                  </div>
+                  <div className="data-row-body">
+                    <div className="data-row-title flex items-center gap-1.5">
+                      <span className="mono">{fmt(r.de, r.monto_de)}</span>
+                      <ArrowRight size={12} style={{ color: "var(--ink-faint)" }} />
+                      <span className="mono">{fmt(r.a, r.monto_a)}</span>
+                    </div>
+                    <div className="data-row-sub">
+                      {r.fecha} · TC {fmtNum.format(tc)}
+                    </div>
+                  </div>
+                </button>
               );
             })}
-          </tbody>
-        </table>
-      </div>
+          </div>
+
+          {/* Desktop */}
+          <div className="card overflow-x-auto hidden sm:block">
+            <table className="w-full text-sm">
+              <thead>
+                <tr
+                  className="text-xs uppercase tracking-wider"
+                  style={{ color: "var(--ink-faint)" }}
+                >
+                  <th className="text-left px-3 py-2">Fecha</th>
+                  <th className="text-left px-3 py-2">De</th>
+                  <th className="text-right px-3 py-2">Monto origen</th>
+                  <th className="text-left px-3 py-2">A</th>
+                  <th className="text-right px-3 py-2">Monto destino</th>
+                  <th className="text-right px-3 py-2">TC implícito</th>
+                  <th className="px-3 py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.id} style={{ borderTop: "1px solid var(--line)" }}>
+                    <td className="px-3 py-2 mono">{r.fecha}</td>
+                    <td className="px-3 py-2">{r.de}</td>
+                    <td className="px-3 py-2 mono text-right whitespace-nowrap">
+                      {fmt(r.de, r.monto_de)}
+                    </td>
+                    <td className="px-3 py-2">{r.a}</td>
+                    <td className="px-3 py-2 mono text-right whitespace-nowrap">
+                      {fmt(r.a, r.monto_a)}
+                    </td>
+                    <td className="px-3 py-2 mono text-right">
+                      {fmtNum.format(implicitTc(r))}
+                    </td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      <button
+                        onClick={() => openEdit(r)}
+                        aria-label="Editar"
+                        className="p-1.5"
+                        style={{ color: "var(--ink-soft)" }}
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      <button
+                        onClick={() => remove(r)}
+                        aria-label="Borrar"
+                        className="p-1.5 ml-1"
+                        style={{ color: "var(--neg)" }}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       <Modal
         open={!!modal}
@@ -199,18 +256,16 @@ export default function ConversionesClient({
       >
         {modal && (
           <div className="flex flex-col gap-3">
-            <label className="flex flex-col">
-              <span className="label">Fecha</span>
+            <Field label="Fecha">
               <input
                 className="input"
                 type="date"
                 value={modal.fecha}
                 onChange={(e) => setModal({ ...modal, fecha: e.target.value })}
               />
-            </label>
+            </Field>
             <div className="grid grid-cols-2 gap-3">
-              <label className="flex flex-col">
-                <span className="label">De</span>
+              <Field label="De">
                 <select
                   className="input"
                   value={modal.de}
@@ -221,12 +276,12 @@ export default function ConversionesClient({
                   <option>ARS</option>
                   <option>USD</option>
                 </select>
-              </label>
-              <label className="flex flex-col">
-                <span className="label">Monto origen</span>
+              </Field>
+              <Field label="Monto origen">
                 <input
                   className="input mono"
                   type="number"
+                  inputMode="decimal"
                   min={0}
                   step="0.01"
                   value={modal.monto_de}
@@ -234,9 +289,8 @@ export default function ConversionesClient({
                     setModal({ ...modal, monto_de: e.target.value })
                   }
                 />
-              </label>
-              <label className="flex flex-col">
-                <span className="label">A</span>
+              </Field>
+              <Field label="A">
                 <select
                   className="input"
                   value={modal.a}
@@ -247,12 +301,12 @@ export default function ConversionesClient({
                   <option>USD</option>
                   <option>ARS</option>
                 </select>
-              </label>
-              <label className="flex flex-col">
-                <span className="label">Monto destino</span>
+              </Field>
+              <Field label="Monto destino">
                 <input
                   className="input mono"
                   type="number"
+                  inputMode="decimal"
                   min={0}
                   step="0.01"
                   value={modal.monto_a}
@@ -260,16 +314,17 @@ export default function ConversionesClient({
                     setModal({ ...modal, monto_a: e.target.value })
                   }
                 />
-              </label>
+              </Field>
             </div>
             <div className="flex justify-end gap-2 mt-2">
-              <button className="btn" onClick={() => setModal(null)}>
+              <button className="btn" onClick={() => setModal(null)} type="button">
                 Cancelar
               </button>
               <button
                 className="btn btn-primary"
                 onClick={save}
                 disabled={saving}
+                type="button"
               >
                 {saving ? "Guardando…" : "Guardar"}
               </button>
@@ -278,5 +333,20 @@ export default function ConversionesClient({
         )}
       </Modal>
     </>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="flex flex-col">
+      <span className="label">{label}</span>
+      {children}
+    </label>
   );
 }
