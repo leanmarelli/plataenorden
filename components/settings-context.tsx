@@ -29,11 +29,12 @@ export function SettingsProvider({
   const [settings, setSettings] = useState<PublicSettings>(initial);
   const supabase = createSupabaseBrowserClient();
 
-  // Aplicar tema al <html>
+  // Aplicar tema al <html>. Si estaba 'system' (heredado), lo dejamos actuar
+  // como light por defecto — el toggle sólo alterna light/dark ahora.
   useEffect(() => {
     const el = document.documentElement;
-    if (settings.theme === "system") el.removeAttribute("data-theme");
-    else el.setAttribute("data-theme", settings.theme);
+    const applied = settings.theme === "system" ? "light" : settings.theme;
+    el.setAttribute("data-theme", applied);
   }, [settings.theme]);
 
   const updateSettings = useCallback(

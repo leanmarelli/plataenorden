@@ -31,6 +31,8 @@ export type MovForm = {
   medio: string;
   fv: FijoVar;
   estado: MovEstado;
+  /** Sólo aplica al crear (no al editar): auto-crea un Fijo asociado. */
+  repetirMensual: boolean;
 };
 
 export function emptyMovForm(fecha: string, tc: number): MovForm {
@@ -46,6 +48,7 @@ export function emptyMovForm(fecha: string, tc: number): MovForm {
     medio: MEDIOS[1],
     fv: "Variable",
     estado: "Confirmado",
+    repetirMensual: false,
   };
 }
 
@@ -62,6 +65,7 @@ export function movFormFrom(r: Movimiento, defaultTc: number): MovForm {
     medio: r.medio ?? "",
     fv: r.fv,
     estado: r.estado,
+    repetirMensual: false,
   };
 }
 
@@ -135,9 +139,36 @@ export default function MovimientoDialog({
         toast("Sesión expirada, refrescá la página", "error");
         return;
       }
+
+      // Si "repetir cada mes" está marcado, creamos primero el Fijo así podemos
+      // linkear el movimiento a él con from_fijo.
+      let fromFijoId: string | null = null;
+      if (local.repetirMensual) {
+        const dia = Number(local.fecha.slice(8, 10)) || 1;
+        const { data: fijoData, error: fijoErr } = await supabase
+          .from("fijos")
+          .insert({
+            user_id: user.id,
+            concepto: local.descripcion || local.cat,
+            cat: local.cat,
+            mon: local.mon,
+            monto,
+            dia,
+            tipo: local.tipo,
+          })
+          .select()
+          .single();
+        if (fijoErr) {
+          setSaving(false);
+          toast("No se pudo crear el fijo: " + fijoErr.message, "error");
+          return;
+        }
+        fromFijoId = fijoData.id;
+      }
+
       const { data, error } = await supabase
         .from("movimientos")
-        .insert({ ...row, user_id: user.id })
+        .insert({ ...row, user_id: user.id, from_fijo: fromFijoId })
         .select()
         .single();
       setSaving(false);
@@ -146,7 +177,12 @@ export default function MovimientoDialog({
         return;
       }
       onSaved?.(data as Movimiento);
-      toast("Movimiento agregado", "success");
+      toast(
+        local.repetirMensual
+          ? "Movimiento agregado y guardado como recurrente"
+          : "Movimiento agregado",
+        "success",
+      );
     }
     onClose();
     router.refresh();
@@ -305,6 +341,51 @@ export default function MovimientoDialog({
                 onChange={(e) => setLocal({ ...local, tc: e.target.value })}
               />
             </Field>
+          )}
+
+          {/* Repetir cada mes: solo al crear */}
+          {!local.id && (
+            <label
+              className="flex items-start gap-3 p-3 rounded-xl cursor-pointer transition"
+              style={{
+                background: local.repetirMensual
+                  ? "var(--accent-soft)"
+                  : "var(--surface-2)",
+                border: `1px solid ${local.repetirMensual ? "var(--accent)" : "var(--line)"}`,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={local.repetirMensual}
+                onChange={(e) =>
+                  setLocal({
+                    ...local,
+                    repetirMensual: e.target.checked,
+                    fv: e.target.checked ? "Fijo" : local.fv,
+                  })
+                }
+                className="mt-0.5 w-4 h-4 accent-[var(--accent)]"
+              />
+              <div className="flex-1">
+                <div
+                  className="text-sm font-semibold"
+                  style={{ color: local.repetirMensual ? "var(--accent-ink)" : "var(--ink)" }}
+                >
+                  Se repite todos los meses
+                </div>
+                <div
+                  className="text-xs mt-0.5"
+                  style={{
+                    color: local.repetirMensual
+                      ? "var(--accent-ink)"
+                      : "var(--ink-faint)",
+                  }}
+                >
+                  Se guarda también en Fijos, así podés generarlo cada mes con
+                  un clic.
+                </div>
+              </div>
+            </label>
           )}
 
           <div className="flex justify-end gap-2 mt-2">

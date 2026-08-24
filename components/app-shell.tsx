@@ -8,7 +8,6 @@ import {
   DollarSign,
   Sun,
   Moon,
-  Monitor,
   Plus,
   LayoutDashboard,
   Receipt,
@@ -418,21 +417,23 @@ function CurToggle({
   );
 }
 
-/* ─────────── Theme toggle ─────────── */
+/* ─────────── Theme toggle: solo claro/oscuro ─────────── */
 function ThemeToggle({
   value,
   onChange,
 }: {
   value: "light" | "dark" | "system";
-  onChange: (v: "light" | "dark" | "system") => void;
+  onChange: (v: "light" | "dark") => void;
 }) {
-  const next = value === "light" ? "dark" : value === "dark" ? "system" : "light";
-  const Icon = value === "light" ? Sun : value === "dark" ? Moon : Monitor;
+  // Si estaba en 'system', lo tratamos como light para el primer toggle
+  const isDark = value === "dark";
+  const next = isDark ? "light" : "dark";
+  const Icon = isDark ? Sun : Moon;
   return (
     <button
       onClick={() => onChange(next)}
-      title={`Tema: ${value} → ${next}`}
-      aria-label="Cambiar tema"
+      title={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
+      aria-label={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
       className="grid place-items-center rounded-[10px]"
       style={{
         width: 36,

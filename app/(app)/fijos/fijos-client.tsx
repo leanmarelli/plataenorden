@@ -1,19 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash2, Plus, RefreshCcw } from "lucide-react";
+import { Pencil, Trash2, Plus, RefreshCcw, Zap, Check } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useSettings } from "@/components/settings-context";
 import { useToast } from "@/components/toast-provider";
 import PageHeader from "@/components/page-header";
 import EmptyState from "@/components/empty-state";
 import Modal from "@/components/modal";
-import { CATS_GASTO } from "@/lib/constants";
+import { CATS_AHORRO, CATS_GASTO, CATS_INGRESO } from "@/lib/constants";
 import { fixedArs } from "@/lib/calc";
 import { fmtARS, fmtUSD2 } from "@/lib/format";
 import { iconForCategory } from "@/lib/mov-icons";
-import type { Fijo, Moneda } from "@/types/database";
+import type { Fijo, Moneda, MovTipo } from "@/types/database";
 
 type Form = {
   id: string | null;
@@ -22,7 +22,14 @@ type Form = {
   mon: Moneda;
   monto: string;
   dia: string;
+  tipo: MovTipo;
 };
+
+function catsFor(tipo: MovTipo): readonly string[] {
+  if (tipo === "Ingreso") return CATS_INGRESO;
+  if (tipo === "Ahorro") return CATS_AHORRO;
+  return CATS_GASTO;
+}
 
 const empty: Form = {
   id: null,
@@ -31,6 +38,7 @@ const empty: Form = {
   mon: "ARS",
   monto: "",
   dia: "1",
+  tipo: "Gasto",
 };
 
 export default function FijosClient({ initial }: { initial: Fijo[] }) {
@@ -42,8 +50,18 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
   const [rows, setRows] = useState<Fijo[]>(initial);
   const [modal, setModal] = useState<Form | null>(null);
   const [saving, setSaving] = useState(false);
+  const [materializing, setMaterializing] = useState<string | null>(null);
 
-  const totalArs = rows.reduce((a, f) => a + fixedArs(f, settings.tc_ref), 0);
+  const totales = useMemo(() => {
+    const g = { gasto: 0, ingreso: 0, ahorro: 0 };
+    for (const f of rows) {
+      const ars = fixedArs(f, settings.tc_ref);
+      if (f.tipo === "Ingreso") g.ingreso += ars;
+      else if (f.tipo === "Ahorro") g.ahorro += ars;
+      else g.gasto += ars;
+    }
+    return g;
+  }, [rows, settings.tc_ref]);
 
   function openEdit(f: Fijo) {
     setModal({
@@ -53,6 +71,7 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
       mon: f.mon,
       monto: String(f.monto),
       dia: String(f.dia),
+      tipo: f.tipo,
     });
   }
 
@@ -73,6 +92,7 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
       mon: modal.mon,
       monto,
       dia,
+      tipo: modal.tipo,
     };
 
     if (modal.id) {
@@ -109,7 +129,12 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
   }
 
   async function remove(f: Fijo) {
-    if (!confirm(`¿Borrar "${f.concepto}"?`)) return;
+    if (
+      !confirm(
+        `¿Borrar "${f.concepto}"? Los movimientos ya generados no se borran.`,
+      )
+    )
+      return;
     const prev = rows;
     setRows((rs) => rs.filter((r) => r.id !== f.id));
     const { error } = await supabase.from("fijos").delete().eq("id", f.id);
@@ -121,14 +146,78 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
     }
   }
 
+  /** Genera el movimiento del mes activo para este fijo (si aún no existe). */
+  async function materializar(f: Fijo) {
+    setMaterializing(f.id);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      setMaterializing(null);
+      return toast("Sesión expirada", "error");
+    }
+
+    // Chequear si ya hay uno de este fijo en el mes actual
+    const { data: existente } = await supabase
+      .from("movimientos")
+      .select("id")
+      .eq("from_fijo", f.id)
+      .gte("fecha", `${settings.mes}-01`)
+      .lt("fecha", nextMonthDate(settings.mes))
+      .limit(1);
+    if (existente && existente.length > 0) {
+      setMaterializing(null);
+      return toast(
+        `Ya existe un movimiento de "${f.concepto}" en ${settings.mes}`,
+        "info",
+      );
+    }
+
+    const dia = String(Math.min(f.dia, daysInMonth(settings.mes))).padStart(
+      2,
+      "0",
+    );
+    const fecha = `${settings.mes}-${dia}`;
+
+    const { error } = await supabase.from("movimientos").insert({
+      user_id: user.id,
+      fecha,
+      tipo: f.tipo,
+      cat: f.cat,
+      descripcion: f.concepto,
+      mon: f.mon,
+      monto: f.monto,
+      tc: settings.tc_ref,
+      medio: null,
+      fv: "Fijo",
+      estado: "Confirmado",
+      from_fijo: f.id,
+    });
+    setMaterializing(null);
+    if (error) return toast(error.message, "error");
+    toast(`Movimiento de "${f.concepto}" cargado en ${settings.mes}`, "success");
+    router.refresh();
+  }
+
+  const tipoColor = (t: MovTipo) =>
+    t === "Ingreso"
+      ? { bg: "var(--pos-soft)", fg: "var(--pos)" }
+      : t === "Ahorro"
+        ? { bg: "var(--accent-soft)", fg: "var(--accent-ink)" }
+        : { bg: "var(--neg-soft)", fg: "var(--neg)" };
+
   return (
     <>
       <PageHeader
-        title="Gastos fijos"
-        subtitle={`compromiso mensual estimado · ${fmtARS.format(totalArs)}`}
+        title="Recurrentes"
+        subtitle={
+          totales.gasto || totales.ingreso || totales.ahorro
+            ? `mensual: ${fmtARS.format(totales.ingreso)} ingresos · ${fmtARS.format(totales.gasto)} gastos · ${fmtARS.format(totales.ahorro)} ahorro`
+            : "gastos, ingresos y ahorros que se repiten cada mes"
+        }
         action={
           <button className="btn btn-primary" onClick={() => setModal(empty)}>
-            <Plus size={16} /> Nuevo fijo
+            <Plus size={16} /> Nuevo
           </button>
         }
       />
@@ -137,54 +226,70 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
         <div className="card">
           <EmptyState
             icon={RefreshCcw}
-            title="Todavía no cargaste fijos"
-            description="Alquiler, expensas, servicios, suscripciones… todo lo que se repite mes a mes."
+            title="Todavía no cargaste recurrentes"
+            description="Alquiler, sueldo, expensas, servicios, suscripciones… todo lo que se repite mes a mes."
             action={
               <button className="btn btn-primary" onClick={() => setModal(empty)}>
-                <Plus size={16} /> Nuevo fijo
+                <Plus size={16} /> Nuevo recurrente
               </button>
             }
           />
         </div>
       ) : (
         <>
-          {/* Mobile: cards */}
+          {/* Mobile */}
           <div className="card sm:hidden">
             {rows.map((r) => {
-              const Icon = iconForCategory(r.cat, "Gasto");
+              const Icon = iconForCategory(r.cat, r.tipo);
+              const col = tipoColor(r.tipo);
               return (
-                <button
+                <div
                   key={r.id}
-                  className="data-row w-full text-left active:opacity-70"
-                  onClick={() => openEdit(r)}
-                  type="button"
+                  className="data-row items-start"
+                  style={{ paddingTop: 14, paddingBottom: 14 }}
                 >
-                  <div
-                    className="data-row-icon"
-                    style={{
-                      background: "var(--surface-2)",
-                      color: "var(--ink-soft)",
-                    }}
+                  <button
+                    className="flex items-center gap-3 flex-1 text-left min-w-0"
+                    onClick={() => openEdit(r)}
+                    type="button"
                   >
-                    <Icon size={18} />
-                  </div>
-                  <div className="data-row-body">
-                    <div className="data-row-title">{r.concepto}</div>
-                    <div className="data-row-sub">
-                      día {r.dia} · {r.cat}
+                    <div
+                      className="data-row-icon"
+                      style={{ background: col.bg, color: col.fg }}
+                    >
+                      <Icon size={18} />
                     </div>
-                  </div>
-                  <div className="data-row-amount">
-                    {r.mon === "USD"
-                      ? fmtUSD2.format(r.monto)
-                      : fmtARS.format(r.monto)}
-                  </div>
-                </button>
+                    <div className="data-row-body">
+                      <div className="data-row-title">{r.concepto}</div>
+                      <div className="data-row-sub">
+                        día {r.dia} · {r.tipo.toLowerCase()} · {r.cat}
+                      </div>
+                    </div>
+                    <div className="data-row-amount" style={{ color: col.fg }}>
+                      {r.mon === "USD"
+                        ? fmtUSD2.format(r.monto)
+                        : fmtARS.format(r.monto)}
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => materializar(r)}
+                    disabled={materializing === r.id}
+                    className="ml-2 self-center p-2 rounded-lg"
+                    style={{
+                      background: "var(--accent-soft)",
+                      color: "var(--accent-ink)",
+                    }}
+                    aria-label={`Cargar en ${settings.mes}`}
+                    title={`Cargar en ${settings.mes}`}
+                  >
+                    {materializing === r.id ? "…" : <Zap size={16} />}
+                  </button>
+                </div>
               );
             })}
           </div>
 
-          {/* Desktop: tabla */}
+          {/* Desktop */}
           <div className="card overflow-x-auto hidden sm:block">
             <table className="w-full text-sm">
               <thead>
@@ -194,6 +299,7 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
                 >
                   <th className="text-left px-3 py-2">Día</th>
                   <th className="text-left px-3 py-2">Concepto</th>
+                  <th className="text-left px-3 py-2">Tipo</th>
                   <th className="text-left px-3 py-2">Categoría</th>
                   <th className="text-right px-3 py-2">Monto</th>
                   <th className="px-3 py-2" />
@@ -201,13 +307,28 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
               </thead>
               <tbody>
                 {rows.map((r) => {
-                  const Icon = iconForCategory(r.cat, "Gasto");
+                  const Icon = iconForCategory(r.cat, r.tipo);
+                  const col = tipoColor(r.tipo);
                   return (
-                    <tr key={r.id} style={{ borderTop: "1px solid var(--line)" }}>
+                    <tr
+                      key={r.id}
+                      style={{ borderTop: "1px solid var(--line)" }}
+                    >
                       <td className="px-3 py-2 mono">{r.dia}</td>
                       <td className="px-3 py-2 font-medium">{r.concepto}</td>
                       <td className="px-3 py-2">
-                        <span className="inline-flex items-center gap-2" style={{ color: "var(--ink-soft)" }}>
+                        <span
+                          className="text-xs px-2 py-0.5 rounded-full"
+                          style={{ background: col.bg, color: col.fg }}
+                        >
+                          {r.tipo}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span
+                          className="inline-flex items-center gap-2"
+                          style={{ color: "var(--ink-soft)" }}
+                        >
                           <Icon size={14} />
                           {r.cat}
                         </span>
@@ -218,12 +339,40 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
                           : fmtARS.format(r.monto)}
                       </td>
                       <td className="px-3 py-2 text-right whitespace-nowrap">
-                        <IconBtn onClick={() => openEdit(r)} label="Editar">
+                        <button
+                          onClick={() => materializar(r)}
+                          disabled={materializing === r.id}
+                          className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-md mr-2"
+                          style={{
+                            background: "var(--accent-soft)",
+                            color: "var(--accent-ink)",
+                          }}
+                          title={`Cargar en ${settings.mes}`}
+                        >
+                          {materializing === r.id ? (
+                            "…"
+                          ) : (
+                            <>
+                              <Zap size={13} /> Cargar
+                            </>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => openEdit(r)}
+                          aria-label="Editar"
+                          className="p-1.5"
+                          style={{ color: "var(--ink-soft)" }}
+                        >
                           <Pencil size={15} />
-                        </IconBtn>
-                        <IconBtn onClick={() => remove(r)} label="Borrar" danger>
+                        </button>
+                        <button
+                          onClick={() => remove(r)}
+                          aria-label="Borrar"
+                          className="p-1.5 ml-1"
+                          style={{ color: "var(--neg)" }}
+                        >
                           <Trash2 size={15} />
-                        </IconBtn>
+                        </button>
                       </td>
                     </tr>
                   );
@@ -237,10 +386,40 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
       <Modal
         open={!!modal}
         onClose={() => setModal(null)}
-        title={modal?.id ? "Editar fijo" : "Nuevo fijo"}
+        title={modal?.id ? "Editar recurrente" : "Nuevo recurrente"}
       >
         {modal && (
           <div className="flex flex-col gap-3">
+            <Field label="Tipo">
+              <div
+                className="grid grid-cols-3 rounded-[10px] p-[3px] gap-[2px]"
+                style={{
+                  background: "var(--surface-2)",
+                  border: "1px solid var(--line)",
+                }}
+              >
+                {(["Gasto", "Ingreso", "Ahorro"] as MovTipo[]).map((t) => {
+                  const active = modal.tipo === t;
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() =>
+                        setModal({ ...modal, tipo: t, cat: catsFor(t)[0] })
+                      }
+                      className="py-2 text-sm font-semibold rounded-[7px] transition"
+                      style={{
+                        background: active ? "var(--surface)" : "transparent",
+                        color: active ? "var(--ink)" : "var(--ink-soft)",
+                        boxShadow: active ? "var(--shadow)" : "none",
+                      }}
+                    >
+                      {t}
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
             <Field label="Concepto">
               <input
                 className="input"
@@ -248,6 +427,7 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
                 onChange={(e) =>
                   setModal({ ...modal, concepto: e.target.value })
                 }
+                placeholder="ej. Alquiler, Sueldo, Netflix…"
               />
             </Field>
             <Field label="Categoría">
@@ -256,7 +436,7 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
                 value={modal.cat}
                 onChange={(e) => setModal({ ...modal, cat: e.target.value })}
               >
-                {CATS_GASTO.map((c) => (
+                {catsFor(modal.tipo).map((c) => (
                   <option key={c}>{c}</option>
                 ))}
               </select>
@@ -300,7 +480,11 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
               </Field>
             </div>
             <div className="flex justify-end gap-2 mt-2">
-              <button className="btn" onClick={() => setModal(null)} type="button">
+              <button
+                className="btn"
+                onClick={() => setModal(null)}
+                type="button"
+              >
                 Cancelar
               </button>
               <button
@@ -309,7 +493,13 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
                 disabled={saving}
                 type="button"
               >
-                {saving ? "Guardando…" : "Guardar"}
+                {saving ? (
+                  "Guardando…"
+                ) : (
+                  <>
+                    <Check size={15} /> Guardar
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -334,25 +524,16 @@ function Field({
   );
 }
 
-function IconBtn({
-  children,
-  onClick,
-  label,
-  danger = false,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  label: string;
-  danger?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      aria-label={label}
-      className="p-1.5 rounded-md ml-1 transition"
-      style={{ color: danger ? "var(--neg)" : "var(--ink-soft)" }}
-    >
-      {children}
-    </button>
-  );
+/** "2026-08" → días del mes. */
+function daysInMonth(mes: string) {
+  const [y, m] = mes.split("-").map(Number);
+  return new Date(y, m, 0).getDate();
+}
+
+/** "2026-08" → "2026-09-01" (útil para queries < próximo mes). */
+function nextMonthDate(mes: string) {
+  const [y, m] = mes.split("-").map(Number);
+  const nm = m === 12 ? 1 : m + 1;
+  const ny = m === 12 ? y + 1 : y;
+  return `${ny}-${String(nm).padStart(2, "0")}-01`;
 }

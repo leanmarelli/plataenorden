@@ -104,6 +104,7 @@ export type Database = {
           mon: Moneda;
           monto: number;
           dia: number;
+          tipo: MovTipo;
           created_at: string;
           updated_at: string;
         };
@@ -115,6 +116,7 @@ export type Database = {
           mon: Moneda;
           monto: number;
           dia: number;
+          tipo?: MovTipo;
           created_at?: string;
           updated_at?: string;
         };
@@ -126,6 +128,7 @@ export type Database = {
           mon?: Moneda;
           monto?: number;
           dia?: number;
+          tipo?: MovTipo;
           created_at?: string;
           updated_at?: string;
         };

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash2, Plus, Receipt, Search } from "lucide-react";
+import { Pencil, Trash2, Plus, Receipt, Search, CircleDollarSign } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useSettings } from "@/components/settings-context";
 import { useToast } from "@/components/toast-provider";
@@ -13,6 +13,7 @@ import MovimientoDialog, {
   movFormFrom,
   type MovForm,
 } from "@/components/movimiento-dialog";
+import CobrarDialog from "@/components/cobrar-dialog";
 import { iconForCategory } from "@/lib/mov-icons";
 import { fmtARS, fmtUSD2, labelMes } from "@/lib/format";
 import type { Movimiento, MovTipo } from "@/types/database";
@@ -31,6 +32,7 @@ export default function MovimientosClient({
   const [filtro, setFiltro] = useState<"" | MovTipo>("");
   const [busq, setBusq] = useState("");
   const [form, setForm] = useState<MovForm | null>(null);
+  const [cobrando, setCobrando] = useState<Movimiento | null>(null);
 
   const shown = useMemo(() => {
     const b = busq.trim().toLowerCase();
@@ -140,6 +142,7 @@ export default function MovimientosClient({
                 row={r}
                 onEdit={() => openEdit(r)}
                 onDelete={() => remove(r)}
+                onCobrar={() => setCobrando(r)}
               />
             ))}
           </div>
@@ -168,6 +171,7 @@ export default function MovimientosClient({
                     row={r}
                     onEdit={() => openEdit(r)}
                     onDelete={() => remove(r)}
+                    onCobrar={() => setCobrando(r)}
                   />
                 ))}
               </tbody>
@@ -187,6 +191,19 @@ export default function MovimientosClient({
           });
         }}
       />
+
+      <CobrarDialog
+        mov={cobrando}
+        onClose={() => setCobrando(null)}
+        onDone={({ updated, created }) => {
+          setRows((rs) => {
+            let next = rs;
+            if (updated) next = next.map((r) => (r.id === updated.id ? updated : r));
+            if (created) next = [created, ...next];
+            return next;
+          });
+        }}
+      />
     </>
   );
 }
@@ -195,10 +212,12 @@ function MovRowMobile({
   row,
   onEdit,
   onDelete,
+  onCobrar,
 }: {
   row: Movimiento;
   onEdit: () => void;
   onDelete: () => void;
+  onCobrar: () => void;
 }) {
   const Icon = iconForCategory(row.cat, row.tipo);
   const color =
@@ -209,43 +228,58 @@ function MovRowMobile({
         : { bg: "var(--neg-soft)", fg: "var(--neg)" };
   const monto =
     row.mon === "USD" ? fmtUSD2.format(row.monto) : fmtARS.format(row.monto);
+  const isPending = row.estado === "Pendiente";
   return (
-    <button
-      className="data-row w-full text-left active:opacity-70"
-      onClick={onEdit}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        onDelete();
-      }}
-      type="button"
-    >
-      <div
-        className="data-row-icon"
-        style={{ background: color.bg, color: color.fg }}
+    <div className="data-row items-start" style={{ paddingTop: 14, paddingBottom: 14 }}>
+      <button
+        className="flex items-center gap-3 flex-1 text-left min-w-0 active:opacity-70"
+        onClick={onEdit}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onDelete();
+        }}
+        type="button"
       >
-        <Icon size={18} />
-      </div>
-      <div className="data-row-body">
-        <div className="data-row-title">
-          {row.descripcion || row.cat}
+        <div
+          className="data-row-icon"
+          style={{ background: color.bg, color: color.fg }}
+        >
+          <Icon size={18} />
         </div>
-        <div className="data-row-sub">
-          {row.cat} · {row.fecha.slice(8)}/{row.fecha.slice(5, 7)}
-          {row.estado === "Pendiente" && (
-            <span
-              className="ml-1.5 text-[10px] uppercase font-semibold"
-              style={{ color: "var(--warn)" }}
-            >
-              · pendiente
-            </span>
-          )}
+        <div className="data-row-body">
+          <div className="data-row-title">{row.descripcion || row.cat}</div>
+          <div className="data-row-sub">
+            {row.cat} · {row.fecha.slice(8)}/{row.fecha.slice(5, 7)}
+            {isPending && (
+              <span
+                className="ml-1.5 text-[10px] uppercase font-semibold"
+                style={{ color: "var(--warn)" }}
+              >
+                · pendiente
+              </span>
+            )}
+          </div>
         </div>
-      </div>
-      <div className="data-row-amount" style={{ color: color.fg }}>
-        {row.tipo === "Ingreso" ? "+" : ""}
-        {monto}
-      </div>
-    </button>
+        <div className="data-row-amount" style={{ color: color.fg }}>
+          {row.tipo === "Ingreso" ? "+" : ""}
+          {monto}
+        </div>
+      </button>
+      {isPending && (
+        <button
+          onClick={onCobrar}
+          className="ml-2 self-center p-2 rounded-lg"
+          style={{
+            background: "var(--warn-soft)",
+            color: "var(--warn)",
+          }}
+          aria-label="Marcar cobrado"
+          title="Marcar cobrado"
+        >
+          <CircleDollarSign size={16} />
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -253,10 +287,12 @@ function MovRowDesktop({
   row,
   onEdit,
   onDelete,
+  onCobrar,
 }: {
   row: Movimiento;
   onEdit: () => void;
   onDelete: () => void;
+  onCobrar: () => void;
 }) {
   const Icon = iconForCategory(row.cat, row.tipo);
   const color =
@@ -300,6 +336,19 @@ function MovRowDesktop({
         </span>
       </Td>
       <Td className="text-right whitespace-nowrap">
+        {row.estado === "Pendiente" && (
+          <button
+            onClick={onCobrar}
+            className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-md mr-2"
+            style={{
+              background: "var(--warn-soft)",
+              color: "var(--warn)",
+            }}
+            title="Marcar cobrado"
+          >
+            <CircleDollarSign size={13} /> Cobrar
+          </button>
+        )}
         <button
           onClick={onEdit}
           aria-label="Editar"

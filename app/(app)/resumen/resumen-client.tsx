@@ -76,7 +76,9 @@ export default function ResumenClient({
     const balA = ingConfA - gasA - ahoA;
     const balU = ingConfU - gasU - ahoU;
     const tasa = ingConfA > 0 ? ahoA / ingConfA : 0;
-    const fijMensA = fijos.reduce((a, f) => a + fixedArs(f, tcRef), 0);
+    const fijMensA = fijos
+      .filter((f) => f.tipo === "Gasto")
+      .reduce((a, f) => a + fixedArs(f, tcRef), 0);
     const compromiso = ingConfA > 0 ? fijMensA / ingConfA : 0;
     const nMov = mm.filter((x) => x.tipo === "Gasto").length;
 
