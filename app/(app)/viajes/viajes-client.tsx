@@ -2,13 +2,19 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash2, Plus, Plane } from "lucide-react";
+import { Pencil, Trash2, Plus, Plane, Receipt } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/toast-provider";
 import { useConfirm } from "@/components/confirm-provider";
+import { useSettings } from "@/components/settings-context";
 import PageHeader from "@/components/page-header";
 import EmptyState from "@/components/empty-state";
 import Modal from "@/components/modal";
+import PaisPicker from "@/components/pais-picker";
+import MovimientoDialog, {
+  emptyMovForm,
+  type MovForm,
+} from "@/components/movimiento-dialog";
 import type { Moneda, Viaje } from "@/types/database";
 import { fmtARS, fmtUSD2 } from "@/lib/format";
 
@@ -18,6 +24,9 @@ type Form = {
   concepto: string;
   mon: Moneda;
   gastado: string;
+  pais_emoji: string | null;
+  /** Sólo se muestra si el viaje es nuevo o el usuario quiere cambiarlo. */
+  editaPais: boolean;
 };
 
 const empty: Form = {
@@ -26,6 +35,8 @@ const empty: Form = {
   concepto: "",
   mon: "USD",
   gastado: "",
+  pais_emoji: null,
+  editaPais: true,
 };
 
 export default function ViajesClient({ initial }: { initial: Viaje[] }) {
@@ -33,15 +44,22 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
   const supabase = createSupabaseBrowserClient();
   const { toast } = useToast();
   const confirm = useConfirm();
+  const { settings } = useSettings();
   const [rows, setRows] = useState<Viaje[]>(initial);
   const [modal, setModal] = useState<Form | null>(null);
   const [saving, setSaving] = useState(false);
+  const [convertir, setConvertir] = useState<MovForm | null>(null);
 
   const grouped = useMemo(() => {
     const g: Record<string, Viaje[]> = {};
     for (const r of rows) (g[r.viaje] ||= []).push(r);
     return Object.entries(g).sort((a, b) => a[0].localeCompare(b[0]));
   }, [rows]);
+
+  /** Emoji del viaje: el primero cargado en cualquier rubro. */
+  function emojiDe(nombre: string): string | null {
+    return rows.find((r) => r.viaje === nombre && r.pais_emoji)?.pais_emoji ?? null;
+  }
 
   function openEdit(v: Viaje) {
     setModal({
@@ -50,11 +68,18 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
       concepto: v.concepto,
       mon: v.mon,
       gastado: String(v.gastado),
+      pais_emoji: v.pais_emoji ?? emojiDe(v.viaje),
+      editaPais: false,
     });
   }
 
   function openNewIn(viaje: string) {
-    setModal({ ...empty, viaje });
+    setModal({
+      ...empty,
+      viaje,
+      pais_emoji: emojiDe(viaje),
+      editaPais: false, // ya existe → no lo pedimos por default
+    });
   }
 
   async function save() {
@@ -71,6 +96,7 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
       concepto: modal.concepto.trim(),
       mon: modal.mon,
       gastado: gas,
+      pais_emoji: modal.pais_emoji,
     };
     if (modal.id) {
       const { data, error } = await supabase
@@ -81,6 +107,20 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
         .single();
       setSaving(false);
       if (error) return toast(error.message, "error");
+      // Si cambió el emoji, propagarlo al resto de rubros del mismo viaje
+      if (modal.pais_emoji !== undefined) {
+        await supabase
+          .from("viajes")
+          .update({ pais_emoji: modal.pais_emoji })
+          .eq("viaje", payload.viaje);
+        setRows((rs) =>
+          rs.map((r) =>
+            r.viaje === payload.viaje
+              ? { ...r, pais_emoji: modal.pais_emoji }
+              : r,
+          ),
+        );
+      }
       setRows((rs) => rs.map((r) => (r.id === modal.id ? (data as Viaje) : r)));
       toast("Rubro actualizado", "success");
     } else {
@@ -124,6 +164,27 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
     }
   }
 
+  /** Abre el modal de Nuevo Movimiento pre-llenado desde un rubro de viaje. */
+  function convertirEnGasto(v: Viaje) {
+    const form = emptyMovForm(
+      new Date().toISOString().slice(0, 10),
+      settings.tc_ref,
+    );
+    setConvertir({
+      ...form,
+      tipo: "Gasto",
+      cat: "Viaje",
+      descripcion: `${v.viaje}: ${v.concepto}`,
+      mon: v.mon,
+      monto: String(v.gastado || ""),
+    });
+  }
+
+  const isViajeNuevo =
+    !!modal &&
+    !modal.id &&
+    !rows.some((r) => r.viaje.trim() === modal.viaje.trim());
+
   return (
     <>
       <PageHeader
@@ -155,11 +216,17 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
             const total = items.reduce((a, x) => a + x.gastado, 0);
             const mon = items[0]?.mon ?? "USD";
             const fmt = mon === "USD" ? fmtUSD2.format : fmtARS.format;
+            const emoji = emojiDe(nombre);
             return (
               <section key={nombre} className="card p-4 sm:p-5">
                 <div className="flex flex-wrap items-baseline gap-3 mb-3">
-                  <h2 className="text-lg font-serif font-semibold mr-auto">
-                    {nombre}
+                  <h2 className="text-lg font-serif font-semibold mr-auto flex items-baseline gap-2">
+                    {emoji && (
+                      <span className="text-xl" aria-hidden>
+                        {emoji}
+                      </span>
+                    )}
+                    <span>{nombre}</span>
                   </h2>
                   <div
                     className="mono text-base font-semibold"
@@ -176,7 +243,7 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
                   </button>
                 </div>
 
-                {/* Desktop: tabla */}
+                {/* Desktop */}
                 <div className="hidden sm:block">
                   <table className="w-full text-sm">
                     <thead>
@@ -201,9 +268,18 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
                           </td>
                           <td className="px-2 py-2 text-right whitespace-nowrap">
                             <button
+                              onClick={() => convertirEnGasto(r)}
+                              aria-label="Convertir en gasto"
+                              title="Convertir en gasto real"
+                              className="p-1"
+                              style={{ color: "var(--accent-ink)" }}
+                            >
+                              <Receipt size={14} />
+                            </button>
+                            <button
                               onClick={() => openEdit(r)}
                               aria-label="Editar"
-                              className="p-1"
+                              className="p-1 ml-1"
                               style={{ color: "var(--ink-soft)" }}
                             >
                               <Pencil size={14} />
@@ -223,21 +299,36 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
                   </table>
                 </div>
 
-                {/* Mobile: filas simples */}
+                {/* Mobile */}
                 <div className="sm:hidden -mx-4">
                   {items.map((r) => (
-                    <button
+                    <div
                       key={r.id}
-                      className="w-full text-left active:opacity-70 px-4 py-3 flex items-center gap-3"
-                      onClick={() => openEdit(r)}
-                      type="button"
+                      className="flex items-center gap-2 px-4 py-3"
                       style={{ borderTop: "1px solid var(--line)" }}
                     >
-                      <span className="text-sm font-medium flex-1 truncate">
-                        {r.concepto}
-                      </span>
-                      <span className="mono text-sm">{fmt(r.gastado)}</span>
-                    </button>
+                      <button
+                        className="text-left flex-1 min-w-0 active:opacity-70 flex items-center justify-between gap-3"
+                        onClick={() => openEdit(r)}
+                        type="button"
+                      >
+                        <span className="text-sm font-medium truncate">
+                          {r.concepto}
+                        </span>
+                        <span className="mono text-sm">{fmt(r.gastado)}</span>
+                      </button>
+                      <button
+                        onClick={() => convertirEnGasto(r)}
+                        aria-label="Convertir en gasto"
+                        className="p-2 rounded-lg"
+                        style={{
+                          background: "var(--accent-soft)",
+                          color: "var(--accent-ink)",
+                        }}
+                      >
+                        <Receipt size={14} />
+                      </button>
+                    </div>
                   ))}
                 </div>
               </section>
@@ -257,10 +348,46 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
               <input
                 className="input"
                 value={modal.viaje}
-                onChange={(e) => setModal({ ...modal, viaje: e.target.value })}
-                placeholder="Europa 2027"
+                onChange={(e) =>
+                  setModal({
+                    ...modal,
+                    viaje: e.target.value,
+                    // si tipeamos un viaje que ya existe, tomar su emoji
+                    pais_emoji: emojiDe(e.target.value.trim()) ?? modal.pais_emoji,
+                  })
+                }
+                placeholder="Europa 2027, Bariloche invierno…"
               />
             </Field>
+
+            {/* País: se muestra si es viaje nuevo o si el usuario clickea "cambiar" */}
+            {(isViajeNuevo || modal.editaPais) ? (
+              <div>
+                <span className="label">País</span>
+                <PaisPicker
+                  value={modal.pais_emoji}
+                  onChange={(emoji) =>
+                    setModal({ ...modal, pais_emoji: emoji })
+                  }
+                />
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="label" style={{ margin: 0 }}>
+                  País:
+                </span>
+                <span className="text-xl">{modal.pais_emoji ?? "—"}</span>
+                <button
+                  type="button"
+                  onClick={() => setModal({ ...modal, editaPais: true })}
+                  className="text-xs ml-auto font-semibold"
+                  style={{ color: "var(--accent)" }}
+                >
+                  cambiar
+                </button>
+              </div>
+            )}
+
             <Field label="Concepto">
               <input
                 className="input"
@@ -319,6 +446,15 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
           </div>
         )}
       </Modal>
+
+      <MovimientoDialog
+        form={convertir}
+        onClose={() => setConvertir(null)}
+        onSaved={() => {
+          toast("Movimiento creado desde el viaje", "success");
+          router.refresh();
+        }}
+      />
     </>
   );
 }

@@ -178,6 +178,7 @@ export type Database = {
           concepto: string;
           mon: Moneda;
           gastado: number;
+          pais_emoji: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -188,6 +189,7 @@ export type Database = {
           concepto: string;
           mon: Moneda;
           gastado?: number;
+          pais_emoji?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -198,6 +200,7 @@ export type Database = {
           concepto?: string;
           mon?: Moneda;
           gastado?: number;
+          pais_emoji?: string | null;
           created_at?: string;
           updated_at?: string;
         };
