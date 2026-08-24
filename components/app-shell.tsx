@@ -15,6 +15,7 @@ import {
   Target,
   Plane,
   ArrowLeftRight,
+  BarChart3,
 } from "lucide-react";
 import { SettingsProvider, useSettings } from "./settings-context";
 import { ToastProvider } from "./toast-provider";
@@ -29,6 +30,7 @@ import type { Settings } from "@/types/database";
 const TABS = [
   { href: "/resumen", label: "Resumen", icon: LayoutDashboard },
   { href: "/movimientos", label: "Movimientos", icon: Receipt },
+  { href: "/estadisticas", label: "Estadísticas", icon: BarChart3 },
   { href: "/fijos", label: "Fijos", icon: RefreshCcw },
   { href: "/metas", label: "Metas", icon: Target },
   { href: "/viajes", label: "Viajes", icon: Plane },
