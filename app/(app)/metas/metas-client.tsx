@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Pencil, Trash2, Plus, Target } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/toast-provider";
+import { useConfirm } from "@/components/confirm-provider";
 import PageHeader from "@/components/page-header";
 import EmptyState from "@/components/empty-state";
 import Modal from "@/components/modal";
@@ -33,6 +34,7 @@ export default function MetasClient({ initial }: { initial: Meta[] }) {
   const router = useRouter();
   const supabase = createSupabaseBrowserClient();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [rows, setRows] = useState<Meta[]>(initial);
   const [modal, setModal] = useState<Form | null>(null);
   const [saving, setSaving] = useState(false);
@@ -99,7 +101,13 @@ export default function MetasClient({ initial }: { initial: Meta[] }) {
   }
 
   async function remove(m: Meta) {
-    if (!confirm(`¿Borrar "${m.nombre}"?`)) return;
+    const ok = await confirm({
+      title: "Borrar meta",
+      description: `¿Seguro que querés borrar "${m.nombre}"?`,
+      confirmText: "Borrar",
+      danger: true,
+    });
+    if (!ok) return;
     const prev = rows;
     setRows((rs) => rs.filter((r) => r.id !== m.id));
     const { error } = await supabase.from("metas").delete().eq("id", m.id);

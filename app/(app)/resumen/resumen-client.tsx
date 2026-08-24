@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import Link from "next/link";
 import {
   Wallet,
   Receipt,
@@ -8,7 +9,7 @@ import {
   Scale,
   Clock,
   Lock,
-  Target,
+  ChevronRight,
   type LucideIcon,
 } from "lucide-react";
 import { useSettings } from "@/components/settings-context";
@@ -22,7 +23,6 @@ import {
   usdOf,
 } from "@/lib/calc";
 import { fmtARS, fmtUSD, money, pct } from "@/lib/format";
-import EmptyState from "@/components/empty-state";
 
 const KPI_STYLES: Record<
   string,
@@ -59,12 +59,23 @@ export default function ResumenClient({
       (x) => x.tipo === "Ingreso" && x.estado === "Confirmado",
       (x) => usdOf(x, tcRef),
     );
+    // Pendientes: se cuentan de TODOS los meses, no solo el activo
     const pendA = sumBy(
-      mm,
+      movimientos,
       (x) => x.tipo === "Ingreso" && x.estado === "Pendiente",
       (x) => arsOf(x, tcRef),
     );
     const pendU = sumBy(
+      movimientos,
+      (x) => x.tipo === "Ingreso" && x.estado === "Pendiente",
+      (x) => usdOf(x, tcRef),
+    );
+    const pendMesA = sumBy(
+      mm,
+      (x) => x.tipo === "Ingreso" && x.estado === "Pendiente",
+      (x) => arsOf(x, tcRef),
+    );
+    const pendMesU = sumBy(
       mm,
       (x) => x.tipo === "Ingreso" && x.estado === "Pendiente",
       (x) => usdOf(x, tcRef),
@@ -90,9 +101,10 @@ export default function ResumenClient({
         a: ingConfA,
         u: ingConfU,
         meta:
-          pendA > 0
-            ? `+ ${money(cur, pendA, pendU)} por cobrar`
+          pendMesA > 0
+            ? `+ ${money(cur, pendMesA, pendMesU)} por cobrar`
             : "todo cobrado",
+        href: `/movimientos?tipo=Ingreso&estado=Confirmado`,
       },
       {
         c: "neg",
@@ -101,6 +113,7 @@ export default function ResumenClient({
         a: gasA,
         u: gasU,
         meta: `${nMov} movimiento${nMov === 1 ? "" : "s"}`,
+        href: `/movimientos?tipo=Gasto`,
       },
       {
         c: "save",
@@ -109,6 +122,7 @@ export default function ResumenClient({
         a: ahoA,
         u: ahoU,
         meta: `tasa de ahorro ${pct(tasa)}`,
+        href: `/movimientos?tipo=Ahorro`,
       },
       {
         c: balA >= 0 ? "blue" : "neg",
@@ -117,6 +131,7 @@ export default function ResumenClient({
         a: balA,
         u: balU,
         meta: balA >= 0 ? "te queda a favor" : "gastaste de más",
+        href: `/movimientos`,
       },
       {
         c: "warnk",
@@ -124,7 +139,11 @@ export default function ResumenClient({
         lab: "Por cobrar",
         a: pendA,
         u: pendU,
-        meta: "ingresos pendientes",
+        meta:
+          pendA === 0
+            ? "sin pendientes"
+            : `total pendiente (todos los meses)`,
+        href: `/movimientos?tipo=Ingreso&estado=Pendiente&meses=todos`,
       },
       {
         c: "save",
@@ -133,8 +152,17 @@ export default function ResumenClient({
         a: fijMensA,
         u: fijMensA / tcRef,
         meta: `${pct(compromiso)} de tu ingreso`,
+        href: `/fijos`,
       },
-    ] satisfies { c: string; Icon: LucideIcon; lab: string; a: number; u: number; meta: string }[];
+    ] satisfies {
+      c: string;
+      Icon: LucideIcon;
+      lab: string;
+      a: number;
+      u: number;
+      meta: string;
+      href: string;
+    }[];
   }, [movimientos, fijos, mes, cur, tcRef]);
 
   const cats = useMemo(() => {
@@ -181,16 +209,20 @@ export default function ResumenClient({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* KPIs */}
+      {/* KPIs — clickeables: llevan a la vista correspondiente */}
       <section className="grid gap-3 grid-cols-2 lg:grid-cols-3">
         {kpis.map((k, i) => {
           const s = KPI_STYLES[k.c];
           const Icon = k.Icon;
           return (
-            <div
+            <Link
               key={i}
-              className="card p-4 flex flex-col gap-1.5"
-              style={{ borderLeft: `3px solid ${s.ring}` }}
+              href={k.href}
+              className="card p-4 flex flex-col gap-1.5 no-underline group transition active:scale-[.98] hover:shadow-md"
+              style={{
+                borderLeft: `3px solid ${s.ring}`,
+                color: "inherit",
+              }}
             >
               <div className="flex items-center justify-between">
                 <span
@@ -217,10 +249,18 @@ export default function ResumenClient({
               >
                 {money(cur, k.a, k.u)}
               </div>
-              <div className="text-xs" style={{ color: "var(--ink-soft)" }}>
-                {k.meta}
+              <div
+                className="text-xs flex items-center justify-between"
+                style={{ color: "var(--ink-soft)" }}
+              >
+                <span>{k.meta}</span>
+                <ChevronRight
+                  size={14}
+                  className="opacity-0 group-hover:opacity-60 transition"
+                  style={{ color: "var(--ink-faint)" }}
+                />
               </div>
-            </div>
+            </Link>
           );
         })}
       </section>

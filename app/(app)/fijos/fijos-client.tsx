@@ -6,6 +6,7 @@ import { Pencil, Trash2, Plus, RefreshCcw, Zap, Check } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useSettings } from "@/components/settings-context";
 import { useToast } from "@/components/toast-provider";
+import { useConfirm } from "@/components/confirm-provider";
 import PageHeader from "@/components/page-header";
 import EmptyState from "@/components/empty-state";
 import Modal from "@/components/modal";
@@ -46,6 +47,7 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
   const { settings } = useSettings();
   const supabase = createSupabaseBrowserClient();
   const { toast } = useToast();
+  const confirm = useConfirm();
 
   const [rows, setRows] = useState<Fijo[]>(initial);
   const [modal, setModal] = useState<Form | null>(null);
@@ -129,12 +131,13 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
   }
 
   async function remove(f: Fijo) {
-    if (
-      !confirm(
-        `¿Borrar "${f.concepto}"? Los movimientos ya generados no se borran.`,
-      )
-    )
-      return;
+    const ok = await confirm({
+      title: "Borrar recurrente",
+      description: `¿Seguro que querés borrar "${f.concepto}"? Los movimientos ya generados no se borran.`,
+      confirmText: "Borrar",
+      danger: true,
+    });
+    if (!ok) return;
     const prev = rows;
     setRows((rs) => rs.filter((r) => r.id !== f.id));
     const { error } = await supabase.from("fijos").delete().eq("id", f.id);

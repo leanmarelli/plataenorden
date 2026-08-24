@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { SettingsProvider, useSettings } from "./settings-context";
 import { ToastProvider } from "./toast-provider";
+import { ConfirmProvider } from "./confirm-provider";
 import MovimientoDialog, {
   emptyMovForm,
   type MovForm,
@@ -44,19 +45,21 @@ export default function AppShell({
 }) {
   return (
     <ToastProvider>
-      <SettingsProvider initial={settings}>
-        <Header />
-        <Tabs />
-        <div
-          className="mx-auto max-w-[1120px] px-4 sm:px-5 pt-4"
-          style={{
-            paddingBottom: "calc(96px + env(safe-area-inset-bottom))",
-          }}
-        >
-          {children}
-        </div>
-        <FAB />
-      </SettingsProvider>
+      <ConfirmProvider>
+        <SettingsProvider initial={settings}>
+          <Header />
+          <Tabs />
+          <div
+            className="mx-auto max-w-[1120px] px-4 sm:px-5 pt-4"
+            style={{
+              paddingBottom: "calc(96px + env(safe-area-inset-bottom))",
+            }}
+          >
+            {children}
+          </div>
+          <FAB />
+        </SettingsProvider>
+      </ConfirmProvider>
     </ToastProvider>
   );
 }
@@ -338,6 +341,17 @@ function TcInput({
     if (!focused) setDraft(String(value));
   }, [value, focused]);
 
+  // Debounce mientras el usuario tipea — commit sin esperar blur, así los
+  // cálculos del Resumen se refrescan en vivo.
+  useEffect(() => {
+    if (!focused) return;
+    const t = setTimeout(() => {
+      const n = Number(draft);
+      if (Number.isFinite(n) && n > 0 && n !== value) onChange(n);
+    }, 500);
+    return () => clearTimeout(t);
+  }, [draft, focused, value, onChange]);
+
   function commit() {
     const n = Number(draft);
     if (Number.isFinite(n) && n > 0 && n !== value) onChange(n);
@@ -356,12 +370,11 @@ function TcInput({
     >
       <DollarSign size={14} />
       <input
-        type="number"
+        type="text"
         inputMode="numeric"
-        min={1}
-        step={1}
+        pattern="[0-9]*"
         value={draft}
-        onChange={(e) => setDraft(e.target.value)}
+        onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, ""))}
         onFocus={(e) => {
           setFocused(true);
           e.target.select();
@@ -373,8 +386,8 @@ function TcInput({
         onKeyDown={(e) => {
           if (e.key === "Enter") (e.target as HTMLInputElement).blur();
         }}
-        className="mono bg-transparent border-0 outline-none text-[13px] sm:text-sm font-medium w-[54px] sm:w-[64px] text-left"
-        style={{ color: "inherit" }}
+        className="mono bg-transparent border-0 outline-none text-[13px] sm:text-sm font-medium text-left p-0 m-0"
+        style={{ color: "inherit", width: "5ch", minWidth: 0 }}
         aria-label="Tipo de cambio de referencia (ARS por USD)"
       />
     </label>

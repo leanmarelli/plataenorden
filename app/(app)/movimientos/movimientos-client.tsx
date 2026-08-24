@@ -1,11 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Pencil, Trash2, Plus, Receipt, Search, CircleDollarSign } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import {
+  Pencil,
+  Trash2,
+  Plus,
+  Receipt,
+  Search,
+  CircleDollarSign,
+  X,
+} from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useSettings } from "@/components/settings-context";
 import { useToast } from "@/components/toast-provider";
+import { useConfirm } from "@/components/confirm-provider";
 import PageHeader from "@/components/page-header";
 import EmptyState from "@/components/empty-state";
 import MovimientoDialog, {
@@ -16,7 +25,7 @@ import MovimientoDialog, {
 import CobrarDialog from "@/components/cobrar-dialog";
 import { iconForCategory } from "@/lib/mov-icons";
 import { fmtARS, fmtUSD2, labelMes } from "@/lib/format";
-import type { Movimiento, MovTipo } from "@/types/database";
+import type { Movimiento, MovEstado, MovTipo } from "@/types/database";
 
 export default function MovimientosClient({
   initial,
@@ -24,21 +33,48 @@ export default function MovimientosClient({
   initial: Movimiento[];
 }) {
   const router = useRouter();
+  const search = useSearchParams();
   const { settings } = useSettings();
   const supabase = createSupabaseBrowserClient();
   const { toast } = useToast();
+  const confirm = useConfirm();
 
+  // Seed inicial de filtros desde ?tipo=&estado=&meses=todos
   const [rows, setRows] = useState<Movimiento[]>(initial);
-  const [filtro, setFiltro] = useState<"" | MovTipo>("");
+  const [filtro, setFiltro] = useState<"" | MovTipo>(() => {
+    const v = search.get("tipo");
+    return v === "Ingreso" || v === "Gasto" || v === "Ahorro" ? v : "";
+  });
+  const [estado, setEstado] = useState<"" | MovEstado>(() => {
+    const v = search.get("estado");
+    return v === "Confirmado" || v === "Pendiente" ? v : "";
+  });
+  const [todosMeses, setTodosMeses] = useState<boolean>(
+    () => search.get("meses") === "todos",
+  );
   const [busq, setBusq] = useState("");
   const [form, setForm] = useState<MovForm | null>(null);
   const [cobrando, setCobrando] = useState<Movimiento | null>(null);
 
+  // Re-sincronizar cuando cambian los query params (llegar desde Resumen)
+  useEffect(() => {
+    const v = search.get("tipo");
+    setFiltro(
+      v === "Ingreso" || v === "Gasto" || v === "Ahorro" ? v : "",
+    );
+    const e = search.get("estado");
+    setEstado(e === "Confirmado" || e === "Pendiente" ? e : "");
+    setTodosMeses(search.get("meses") === "todos");
+  }, [search]);
+
   const shown = useMemo(() => {
     const b = busq.trim().toLowerCase();
     return rows
-      .filter((r) => r.fecha.slice(0, 7) === settings.mes)
+      .filter((r) =>
+        todosMeses ? true : r.fecha.slice(0, 7) === settings.mes,
+      )
       .filter((r) => (filtro ? r.tipo === filtro : true))
+      .filter((r) => (estado ? r.estado === estado : true))
       .filter((r) =>
         b
           ? [r.cat, r.descripcion ?? "", r.medio ?? ""]
@@ -47,7 +83,16 @@ export default function MovimientosClient({
               .includes(b)
           : true,
       );
-  }, [rows, filtro, busq, settings.mes]);
+  }, [rows, filtro, estado, todosMeses, busq, settings.mes]);
+
+  const hayFiltro = !!(filtro || estado || todosMeses || busq);
+  function limpiarFiltros() {
+    setFiltro("");
+    setEstado("");
+    setTodosMeses(false);
+    setBusq("");
+    router.replace("/movimientos");
+  }
 
   function openNew() {
     setForm(
@@ -59,8 +104,13 @@ export default function MovimientosClient({
   }
 
   async function remove(r: Movimiento) {
-    if (!confirm(`¿Borrar "${r.cat}${r.descripcion ? " · " + r.descripcion : ""}"?`))
-      return;
+    const ok = await confirm({
+      title: "Borrar movimiento",
+      description: `¿Seguro que querés borrar "${r.cat}${r.descripcion ? " · " + r.descripcion : ""}"?`,
+      confirmText: "Borrar",
+      danger: true,
+    });
+    if (!ok) return;
     const prev = rows;
     setRows((rs) => rs.filter((x) => x.id !== r.id));
     const { error } = await supabase.from("movimientos").delete().eq("id", r.id);
@@ -77,7 +127,11 @@ export default function MovimientosClient({
     <>
       <PageHeader
         title="Movimientos"
-        subtitle={`${labelMes(settings.mes)} · ${shown.length} resultado${shown.length === 1 ? "" : "s"}`}
+        subtitle={
+          todosMeses
+            ? `todos los meses · ${shown.length} resultado${shown.length === 1 ? "" : "s"}`
+            : `${labelMes(settings.mes)} · ${shown.length} resultado${shown.length === 1 ? "" : "s"}`
+        }
         action={
           <button className="btn btn-primary hidden sm:inline-flex" onClick={openNew}>
             <Plus size={16} /> Nuevo
@@ -111,7 +165,61 @@ export default function MovimientosClient({
           <option value="Gasto">Gastos</option>
           <option value="Ahorro">Ahorro</option>
         </select>
+        <select
+          value={estado}
+          onChange={(e) => setEstado(e.target.value as typeof estado)}
+          className="input"
+          style={{ width: "auto" }}
+        >
+          <option value="">Cualquier estado</option>
+          <option value="Confirmado">Confirmados</option>
+          <option value="Pendiente">Pendientes</option>
+        </select>
+        <button
+          type="button"
+          onClick={() => setTodosMeses((v) => !v)}
+          aria-pressed={todosMeses}
+          className="input"
+          style={{
+            width: "auto",
+            fontSize: 13,
+            fontWeight: 600,
+            background: todosMeses ? "var(--accent-soft)" : "var(--surface)",
+            borderColor: todosMeses ? "var(--accent)" : "var(--line)",
+            color: todosMeses ? "var(--accent-ink)" : "var(--ink)",
+            cursor: "pointer",
+          }}
+        >
+          {todosMeses ? "Todos los meses" : "Solo mes activo"}
+        </button>
       </div>
+
+      {hayFiltro && (
+        <div className="flex flex-wrap gap-2 mb-4 items-center">
+          <span
+            className="text-xs uppercase tracking-wider font-semibold"
+            style={{ color: "var(--ink-faint)" }}
+          >
+            Filtros:
+          </span>
+          {filtro && <Chip onClear={() => setFiltro("")}>{filtro}</Chip>}
+          {estado && (
+            <Chip onClear={() => setEstado("")}>Estado: {estado}</Chip>
+          )}
+          {todosMeses && (
+            <Chip onClear={() => setTodosMeses(false)}>Todos los meses</Chip>
+          )}
+          {busq && <Chip onClear={() => setBusq("")}>“{busq}”</Chip>}
+          <button
+            type="button"
+            onClick={limpiarFiltros}
+            className="text-xs font-semibold"
+            style={{ color: "var(--neg)" }}
+          >
+            Limpiar todo
+          </button>
+        </div>
+      )}
 
       {shown.length === 0 ? (
         <div className="card">
@@ -367,6 +475,34 @@ function MovRowDesktop({
         </button>
       </Td>
     </tr>
+  );
+}
+
+function Chip({
+  children,
+  onClear,
+}: {
+  children: React.ReactNode;
+  onClear: () => void;
+}) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full"
+      style={{
+        background: "var(--accent-soft)",
+        color: "var(--accent-ink)",
+      }}
+    >
+      {children}
+      <button
+        type="button"
+        onClick={onClear}
+        aria-label="Quitar filtro"
+        className="ml-0.5 opacity-70 hover:opacity-100"
+      >
+        <X size={12} />
+      </button>
+    </span>
   );
 }
 

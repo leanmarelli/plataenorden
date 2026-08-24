@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Pencil, Trash2, Plus, ArrowLeftRight, ArrowRight } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/toast-provider";
+import { useConfirm } from "@/components/confirm-provider";
 import PageHeader from "@/components/page-header";
 import EmptyState from "@/components/empty-state";
 import Modal from "@/components/modal";
@@ -37,6 +38,7 @@ export default function ConversionesClient({
   const router = useRouter();
   const supabase = createSupabaseBrowserClient();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [rows, setRows] = useState<Conversion[]>(initial);
   const [modal, setModal] = useState<Form | null>(null);
   const [saving, setSaving] = useState(false);
@@ -106,7 +108,13 @@ export default function ConversionesClient({
   }
 
   async function remove(c: Conversion) {
-    if (!confirm("¿Borrar esta conversión?")) return;
+    const ok = await confirm({
+      title: "Borrar conversión",
+      description: "¿Seguro que querés borrar esta conversión?",
+      confirmText: "Borrar",
+      danger: true,
+    });
+    if (!ok) return;
     const prev = rows;
     setRows((rs) => rs.filter((r) => r.id !== c.id));
     const { error } = await supabase

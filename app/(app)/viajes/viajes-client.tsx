@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Pencil, Trash2, Plus, Plane } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/toast-provider";
+import { useConfirm } from "@/components/confirm-provider";
 import PageHeader from "@/components/page-header";
 import EmptyState from "@/components/empty-state";
 import Modal from "@/components/modal";
@@ -31,6 +32,7 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
   const router = useRouter();
   const supabase = createSupabaseBrowserClient();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const [rows, setRows] = useState<Viaje[]>(initial);
   const [modal, setModal] = useState<Form | null>(null);
   const [saving, setSaving] = useState(false);
@@ -104,7 +106,13 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
   }
 
   async function remove(v: Viaje) {
-    if (!confirm(`¿Borrar "${v.concepto}" de ${v.viaje}?`)) return;
+    const ok = await confirm({
+      title: "Borrar rubro",
+      description: `¿Seguro que querés borrar "${v.concepto}" de ${v.viaje}?`,
+      confirmText: "Borrar",
+      danger: true,
+    });
+    if (!ok) return;
     const prev = rows;
     setRows((rs) => rs.filter((r) => r.id !== v.id));
     const { error } = await supabase.from("viajes").delete().eq("id", v.id);
