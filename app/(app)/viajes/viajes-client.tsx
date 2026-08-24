@@ -9,14 +9,13 @@ import PageHeader from "@/components/page-header";
 import EmptyState from "@/components/empty-state";
 import Modal from "@/components/modal";
 import type { Moneda, Viaje } from "@/types/database";
-import { fmtARS, fmtUSD2, pct } from "@/lib/format";
+import { fmtARS, fmtUSD2 } from "@/lib/format";
 
 type Form = {
   id: string | null;
   viaje: string;
   concepto: string;
   mon: Moneda;
-  presupuesto: string;
   gastado: string;
 };
 
@@ -25,8 +24,7 @@ const empty: Form = {
   viaje: "",
   concepto: "",
   mon: "USD",
-  presupuesto: "",
-  gastado: "0",
+  gastado: "",
 };
 
 export default function ViajesClient({ initial }: { initial: Viaje[] }) {
@@ -49,7 +47,6 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
       viaje: v.viaje,
       concepto: v.concepto,
       mon: v.mon,
-      presupuesto: String(v.presupuesto),
       gastado: String(v.gastado),
     });
   }
@@ -63,18 +60,14 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
     if (!modal.viaje.trim())
       return toast("Falta el nombre del viaje", "error");
     if (!modal.concepto.trim()) return toast("Falta el concepto", "error");
-    const pres = Number(modal.presupuesto);
     const gas = Number(modal.gastado);
-    if (!Number.isFinite(pres) || pres < 0)
-      return toast("Presupuesto inválido", "error");
     if (!Number.isFinite(gas) || gas < 0)
-      return toast("Gastado inválido", "error");
+      return toast("Monto inválido", "error");
     setSaving(true);
     const payload = {
       viaje: modal.viaje.trim(),
       concepto: modal.concepto.trim(),
       mon: modal.mon,
-      presupuesto: pres,
       gastado: gas,
     };
     if (modal.id) {
@@ -127,7 +120,7 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
     <>
       <PageHeader
         title="Viajes"
-        subtitle="presupuesto y gastado por rubro"
+        subtitle="lo gastado por rubro en cada viaje"
         action={
           <button className="btn btn-primary" onClick={() => setModal(empty)}>
             <Plus size={16} /> Nuevo rubro
@@ -140,7 +133,7 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
           <EmptyState
             icon={Plane}
             title="Sin viajes cargados"
-            description="Armá el presupuesto de tu próximo viaje y llevá el control por rubro."
+            description="Anotá lo que vas gastando en cada viaje, rubro por rubro."
             action={
               <button className="btn btn-primary" onClick={() => setModal(empty)}>
                 <Plus size={16} /> Nuevo rubro
@@ -151,30 +144,20 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
       ) : (
         <div className="flex flex-col gap-6">
           {grouped.map(([nombre, items]) => {
-            const pres = items.reduce((a, x) => a + x.presupuesto, 0);
-            const gas = items.reduce((a, x) => a + x.gastado, 0);
+            const total = items.reduce((a, x) => a + x.gastado, 0);
             const mon = items[0]?.mon ?? "USD";
             const fmt = mon === "USD" ? fmtUSD2.format : fmtARS.format;
-            const p = pres > 0 ? Math.min(1, gas / pres) : 0;
-            const excedido = gas > pres;
             return (
               <section key={nombre} className="card p-4 sm:p-5">
-                <div className="flex flex-wrap items-baseline gap-3 mb-2">
+                <div className="flex flex-wrap items-baseline gap-3 mb-3">
                   <h2 className="text-lg font-serif font-semibold mr-auto">
                     {nombre}
                   </h2>
-                  <div className="text-sm" style={{ color: "var(--ink-soft)" }}>
-                    <span
-                      className="mono"
-                      style={{
-                        color: excedido ? "var(--neg)" : "var(--ink)",
-                      }}
-                    >
-                      {fmt(gas)}
-                    </span>{" "}
-                    <span style={{ color: "var(--ink-faint)" }}>
-                      de {fmt(pres)} ({pct(p)})
-                    </span>
+                  <div
+                    className="mono text-base font-semibold"
+                    style={{ color: "var(--ink)" }}
+                  >
+                    {fmt(total)}
                   </div>
                   <button
                     className="text-sm inline-flex items-center gap-1"
@@ -184,18 +167,8 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
                     <Plus size={14} /> rubro
                   </button>
                 </div>
-                <div
-                  className="w-full rounded-full h-2 overflow-hidden mb-3"
-                  style={{ background: "var(--surface-2)" }}
-                >
-                  <div
-                    className="h-full"
-                    style={{
-                      width: `${p * 100}%`,
-                      background: excedido ? "var(--neg)" : "var(--accent)",
-                    }}
-                  />
-                </div>
+
+                {/* Desktop: tabla */}
                 <div className="hidden sm:block">
                   <table className="w-full text-sm">
                     <thead>
@@ -204,7 +177,6 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
                         style={{ color: "var(--ink-faint)" }}
                       >
                         <th className="text-left px-2 py-1">Concepto</th>
-                        <th className="text-right px-2 py-1">Presupuesto</th>
                         <th className="text-right px-2 py-1">Gastado</th>
                         <th className="px-2 py-1" />
                       </tr>
@@ -215,14 +187,11 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
                           key={r.id}
                           style={{ borderTop: "1px solid var(--line)" }}
                         >
-                          <td className="px-2 py-1.5">{r.concepto}</td>
-                          <td className="px-2 py-1.5 mono text-right">
-                            {fmt(r.presupuesto)}
-                          </td>
-                          <td className="px-2 py-1.5 mono text-right">
+                          <td className="px-2 py-2">{r.concepto}</td>
+                          <td className="px-2 py-2 mono text-right whitespace-nowrap">
                             {fmt(r.gastado)}
                           </td>
-                          <td className="px-2 py-1.5 text-right whitespace-nowrap">
+                          <td className="px-2 py-2 text-right whitespace-nowrap">
                             <button
                               onClick={() => openEdit(r)}
                               aria-label="Editar"
@@ -245,53 +214,23 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
                     </tbody>
                   </table>
                 </div>
-                {/* Mobile */}
-                <div className="sm:hidden -mx-4 sm:-mx-5">
-                  {items.map((r) => {
-                    const pRow = r.presupuesto > 0
-                      ? Math.min(1, r.gastado / r.presupuesto)
-                      : 0;
-                    const over = r.gastado > r.presupuesto;
-                    return (
-                      <button
-                        key={r.id}
-                        className="w-full text-left active:opacity-70 px-4 py-3"
-                        onClick={() => openEdit(r)}
-                        type="button"
-                        style={{ borderTop: "1px solid var(--line)" }}
-                      >
-                        <div className="flex items-baseline justify-between gap-3 mb-1.5">
-                          <span className="font-medium text-sm">
-                            {r.concepto}
-                          </span>
-                          <span
-                            className="mono text-sm"
-                            style={{
-                              color: over ? "var(--neg)" : "var(--ink)",
-                            }}
-                          >
-                            {fmt(r.gastado)}
-                            <span style={{ color: "var(--ink-faint)" }}>
-                              {" / "}
-                              {fmt(r.presupuesto)}
-                            </span>
-                          </span>
-                        </div>
-                        <div
-                          className="w-full rounded-full h-1 overflow-hidden"
-                          style={{ background: "var(--surface-2)" }}
-                        >
-                          <div
-                            className="h-full"
-                            style={{
-                              width: `${pRow * 100}%`,
-                              background: over ? "var(--neg)" : "var(--accent)",
-                            }}
-                          />
-                        </div>
-                      </button>
-                    );
-                  })}
+
+                {/* Mobile: filas simples */}
+                <div className="sm:hidden -mx-4">
+                  {items.map((r) => (
+                    <button
+                      key={r.id}
+                      className="w-full text-left active:opacity-70 px-4 py-3 flex items-center gap-3"
+                      onClick={() => openEdit(r)}
+                      type="button"
+                      style={{ borderTop: "1px solid var(--line)" }}
+                    >
+                      <span className="text-sm font-medium flex-1 truncate">
+                        {r.concepto}
+                      </span>
+                      <span className="mono text-sm">{fmt(r.gastado)}</span>
+                    </button>
+                  ))}
                 </div>
               </section>
             );
@@ -324,7 +263,7 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
                 placeholder="Pasajes, Alojamiento, Comida…"
               />
             </Field>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <Field label="Moneda">
                 <select
                   className="input"
@@ -337,19 +276,6 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
                   <option>USD</option>
                 </select>
               </Field>
-              <Field label="Presupuesto">
-                <input
-                  className="input mono"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step="0.01"
-                  value={modal.presupuesto}
-                  onChange={(e) =>
-                    setModal({ ...modal, presupuesto: e.target.value })
-                  }
-                />
-              </Field>
               <Field label="Gastado">
                 <input
                   className="input mono"
@@ -361,6 +287,7 @@ export default function ViajesClient({ initial }: { initial: Viaje[] }) {
                   onChange={(e) =>
                     setModal({ ...modal, gastado: e.target.value })
                   }
+                  autoFocus={!modal.id}
                 />
               </Field>
             </div>

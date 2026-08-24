@@ -177,7 +177,6 @@ export type Database = {
           viaje: string;
           concepto: string;
           mon: Moneda;
-          presupuesto: number;
           gastado: number;
           created_at: string;
           updated_at: string;
@@ -188,7 +187,6 @@ export type Database = {
           viaje: string;
           concepto: string;
           mon: Moneda;
-          presupuesto: number;
           gastado?: number;
           created_at?: string;
           updated_at?: string;
@@ -199,7 +197,6 @@ export type Database = {
           viaje?: string;
           concepto?: string;
           mon?: Moneda;
-          presupuesto?: number;
           gastado?: number;
           created_at?: string;
           updated_at?: string;
