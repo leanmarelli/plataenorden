@@ -492,18 +492,19 @@ function TrendChart({
                   const bw = barW * 0.85;
                   return (
                     <g key={b.k}>
-                      {/* Hit area por barra: cubre desde arriba hasta abajo
-                          para que sea fácil de acertar aunque la barra sea
-                          bajita. */}
-                      <rect
-                        x={bx}
-                        y={0}
-                        width={bw}
-                        height={H}
-                        fill="transparent"
-                        onMouseEnter={() => setHover({ i, k: b.k })}
-                        style={{ cursor: b.v > 0 ? "pointer" : "default" }}
-                      />
+                      {/* Hit area por barra sólo si hay valor. Sin datos no
+                          hay tooltip: la columna queda inerte. */}
+                      {b.v > 0 && (
+                        <rect
+                          x={bx}
+                          y={0}
+                          width={bw}
+                          height={H}
+                          fill="transparent"
+                          onMouseEnter={() => setHover({ i, k: b.k })}
+                          style={{ cursor: "pointer" }}
+                        />
+                      )}
                       {b.v > 0 && (
                         <rect
                           x={bx}

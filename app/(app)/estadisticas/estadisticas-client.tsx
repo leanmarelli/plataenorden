@@ -749,15 +749,17 @@ function Sparkles6({
                 const bw = barW * 0.85;
                 return (
                   <g key={b.k}>
-                    <rect
-                      x={bx}
-                      y={0}
-                      width={bw}
-                      height={H}
-                      fill="transparent"
-                      onMouseEnter={() => setHover({ i, k: b.k })}
-                      style={{ cursor: b.v > 0 ? "pointer" : "default" }}
-                    />
+                    {b.v > 0 && (
+                      <rect
+                        x={bx}
+                        y={0}
+                        width={bw}
+                        height={H}
+                        fill="transparent"
+                        onMouseEnter={() => setHover({ i, k: b.k })}
+                        style={{ cursor: "pointer" }}
+                      />
+                    )}
                     {b.v > 0 && (
                       <rect
                         x={bx}
