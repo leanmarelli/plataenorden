@@ -10,6 +10,7 @@ import {
   Zap,
   Check,
   CreditCard,
+  X,
 } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useSettings } from "@/components/settings-context";
@@ -73,6 +74,8 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
   const [modal, setModal] = useState<Form | null>(null);
   const [saving, setSaving] = useState(false);
   const [materializing, setMaterializing] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   const totales = useMemo(() => {
     const g = { gasto: 0, ingreso: 0, ahorro: 0 };
@@ -280,6 +283,115 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
     router.refresh();
   }
 
+  function toggleSel(id: string, disponible: boolean) {
+    if (!disponible) return;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const seleccionables = rows.filter((r) => !esCompleta(r));
+  const selectedList = rows.filter((r) => selected.has(r.id) && !esCompleta(r));
+
+  function toggleAll() {
+    if (selected.size === seleccionables.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(seleccionables.map((r) => r.id)));
+    }
+  }
+
+  /** Carga en batch: materializa el mov y actualiza cuotas_pagas de cada uno. */
+  async function cargarSeleccionados() {
+    if (selectedList.length === 0) return;
+    setBulkLoading(true);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      setBulkLoading(false);
+      return toast("Sesión expirada", "error");
+    }
+
+    let ok = 0;
+    let skip = 0;
+    let fail = 0;
+
+    for (const f of selectedList) {
+      // Chequeo dedupe
+      const { data: existente } = await supabase
+        .from("movimientos")
+        .select("id")
+        .eq("from_fijo", f.id)
+        .gte("fecha", `${settings.mes}-01`)
+        .lt("fecha", nextMonthDate(settings.mes))
+        .limit(1);
+      if (existente && existente.length > 0) {
+        skip++;
+        continue;
+      }
+
+      const dia = String(
+        Math.min(f.dia, daysInMonth(settings.mes)),
+      ).padStart(2, "0");
+      const fecha = `${settings.mes}-${dia}`;
+      const desc =
+        f.cuotas_totales !== null
+          ? `${f.concepto} · cuota ${f.cuotas_pagas + 1}/${f.cuotas_totales}`
+          : f.concepto;
+
+      const { error } = await supabase.from("movimientos").insert({
+        user_id: user.id,
+        fecha,
+        tipo: f.tipo,
+        cat: f.cat,
+        descripcion: desc,
+        mon: f.mon,
+        monto: f.monto,
+        tc: settings.tc_ref,
+        medio: null,
+        fv: "Fijo",
+        estado: "Confirmado",
+        from_fijo: f.id,
+      });
+      if (error) {
+        fail++;
+        continue;
+      }
+
+      if (f.cuotas_totales !== null) {
+        const nuevoPagas = f.cuotas_pagas + 1;
+        const { data: upd } = await supabase
+          .from("fijos")
+          .update({ cuotas_pagas: nuevoPagas })
+          .eq("id", f.id)
+          .select()
+          .single();
+        if (upd) {
+          setRows((rs) =>
+            rs.map((r) => (r.id === f.id ? (upd as Fijo) : r)),
+          );
+        }
+      }
+      ok++;
+    }
+
+    setBulkLoading(false);
+    setSelected(new Set());
+    const partes: string[] = [];
+    if (ok) partes.push(`${ok} cargado${ok === 1 ? "" : "s"}`);
+    if (skip) partes.push(`${skip} ya existía${skip === 1 ? "" : "n"}`);
+    if (fail) partes.push(`${fail} falló${fail === 1 ? "" : "aron"}`);
+    toast(
+      partes.join(" · ") || "Sin cambios",
+      fail > 0 ? "error" : "success",
+    );
+    router.refresh();
+  }
+
   const tipoColor = (t: MovTipo) =>
     t === "Ingreso"
       ? { bg: "var(--pos-soft)", fg: "var(--pos)" }
@@ -303,6 +415,53 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
         }
       />
 
+      {/* Barra de selección: aparece cuando hay 1+ seleccionados */}
+      {selected.size > 0 && (
+        <div
+          className="sticky top-[72px] sm:top-[76px] z-20 mb-3 -mx-4 sm:mx-0 px-4 sm:px-4 py-2.5 flex items-center gap-3 shadow-md"
+          style={{
+            background: "var(--accent)",
+            color: "white",
+            borderRadius: 0,
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setSelected(new Set())}
+            className="p-1 rounded"
+            aria-label="Deseleccionar"
+          >
+            <X size={18} />
+          </button>
+          <div className="flex-1 text-sm font-semibold">
+            {selected.size} seleccionado{selected.size === 1 ? "" : "s"}
+          </div>
+          <button
+            type="button"
+            onClick={toggleAll}
+            className="text-xs font-semibold px-2 py-1 rounded"
+            style={{
+              background: "rgba(255,255,255,.15)",
+            }}
+          >
+            {selected.size === seleccionables.length ? "Ninguno" : "Todos"}
+          </button>
+          <button
+            type="button"
+            onClick={cargarSeleccionados}
+            disabled={bulkLoading}
+            className="inline-flex items-center gap-1 text-sm font-semibold px-3 py-1.5 rounded"
+            style={{
+              background: "white",
+              color: "var(--accent-ink)",
+            }}
+          >
+            <Zap size={14} />
+            {bulkLoading ? "Cargando…" : `Cargar en ${settings.mes}`}
+          </button>
+        </div>
+      )}
+
       {rows.length === 0 ? (
         <div className="card">
           <EmptyState
@@ -325,6 +484,7 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
               const col = tipoColor(r.tipo);
               const completa = esCompleta(r);
               const esCuota = r.cuotas_totales !== null;
+              const isSel = selected.has(r.id);
               return (
                 <div
                   key={r.id}
@@ -333,8 +493,23 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
                     paddingTop: 14,
                     paddingBottom: 14,
                     opacity: completa ? 0.55 : 1,
+                    background: isSel ? "var(--accent-soft)" : "transparent",
                   }}
                 >
+                  {/* Checkbox: solo si el fijo se puede cargar todavía */}
+                  {!completa && (
+                    <label
+                      className="self-center pr-1"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSel}
+                        onChange={() => toggleSel(r.id, true)}
+                        className="w-4 h-4 accent-[var(--accent)]"
+                      />
+                    </label>
+                  )}
                   <button
                     className="flex items-center gap-3 flex-1 text-left min-w-0"
                     onClick={() => openEdit(r)}
@@ -401,6 +576,18 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
                   className="text-xs uppercase tracking-wider"
                   style={{ color: "var(--ink-faint)" }}
                 >
+                  <th className="px-3 py-2" style={{ width: 30 }}>
+                    <input
+                      type="checkbox"
+                      checked={
+                        seleccionables.length > 0 &&
+                        selected.size === seleccionables.length
+                      }
+                      onChange={toggleAll}
+                      className="w-4 h-4 accent-[var(--accent)] align-middle"
+                      aria-label="Seleccionar todos"
+                    />
+                  </th>
                   <th className="text-left px-3 py-2">Día</th>
                   <th className="text-left px-3 py-2">Concepto</th>
                   <th className="text-left px-3 py-2">Tipo</th>
@@ -415,14 +602,26 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
                   const col = tipoColor(r.tipo);
                   const completa = esCompleta(r);
                   const esCuota = r.cuotas_totales !== null;
+                  const isSel = selected.has(r.id);
                   return (
                     <tr
                       key={r.id}
                       style={{
                         borderTop: "1px solid var(--line)",
                         opacity: completa ? 0.5 : 1,
+                        background: isSel ? "var(--accent-soft)" : "transparent",
                       }}
                     >
+                      <td className="px-3 py-2">
+                        {!completa && (
+                          <input
+                            type="checkbox"
+                            checked={isSel}
+                            onChange={() => toggleSel(r.id, true)}
+                            className="w-4 h-4 accent-[var(--accent)] align-middle"
+                          />
+                        )}
+                      </td>
                       <td className="px-3 py-2 mono">{r.dia}</td>
                       <td className="px-3 py-2 font-medium">
                         <span className="inline-flex items-center gap-2">

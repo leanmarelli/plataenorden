@@ -117,10 +117,28 @@ export default function MovimientosClient({
     if (error) {
       toast("No se pudo borrar: " + error.message, "error");
       setRows(prev);
-    } else {
-      toast("Movimiento borrado", "success");
-      router.refresh();
+      return;
     }
+
+    // Si el mov venía de un fijo con cuotas, decrementar el contador para
+    // que la cuota quede "libre" de nuevo. Fijos indefinidos (cuotas_totales
+    // null) no se tocan — puede haber múltiples materializaciones sin límite.
+    if (r.from_fijo) {
+      const { data: fijo } = await supabase
+        .from("fijos")
+        .select("id, cuotas_totales, cuotas_pagas")
+        .eq("id", r.from_fijo)
+        .maybeSingle();
+      if (fijo && fijo.cuotas_totales !== null && fijo.cuotas_pagas > 0) {
+        await supabase
+          .from("fijos")
+          .update({ cuotas_pagas: fijo.cuotas_pagas - 1 })
+          .eq("id", fijo.id);
+      }
+    }
+
+    toast("Movimiento borrado", "success");
+    router.refresh();
   }
 
   return (
