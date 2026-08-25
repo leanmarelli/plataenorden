@@ -8,19 +8,24 @@ import {
   Scale,
   TrendingUp,
   TrendingDown,
-  ChevronLeft,
-  ChevronRight,
+  ArrowDown,
+  ArrowUp,
   type LucideIcon,
 } from "lucide-react";
 import { useSettings } from "@/components/settings-context";
 import PageHeader from "@/components/page-header";
 import { arsOf, converter, sumBy, usdOf } from "@/lib/calc";
 import { fmtARS, fmtUSD, money, pct } from "@/lib/format";
-import type { Fijo, Movimiento } from "@/types/database";
+import { iconForCategory } from "@/lib/mov-icons";
+import type { Fijo, Movimiento, MovTipo } from "@/types/database";
 
-const MESES = [
+const MESES_CORTO = [
   "Ene", "Feb", "Mar", "Abr", "May", "Jun",
   "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
+];
+const MESES_LARGO = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
 
 export default function EstadisticasClient({
@@ -33,91 +38,144 @@ export default function EstadisticasClient({
   const { settings } = useSettings();
   const cur = settings.cur_pref;
   const tcRef = settings.tc_ref;
-  const currentYear = new Date().getFullYear();
-  const [year, setYear] = useState(currentYear);
-
-  const availableYears = useMemo(() => {
-    const set = new Set<number>();
-    movimientos.forEach((m) => set.add(Number(m.fecha.slice(0, 4))));
-    set.add(currentYear);
-    return [...set].sort((a, b) => a - b);
-  }, [movimientos, currentYear]);
+  const mes = settings.mes; // "YYYY-MM"
+  const [year, month] = mes.split("-").map(Number);
 
   const conv = useMemo(() => converter(cur, tcRef), [cur, tcRef]);
   const fmt = cur === "USD" ? fmtUSD.format : fmtARS.format;
 
-  const delAño = useMemo(() => {
-    return movimientos.filter(
-      (m) => Number(m.fecha.slice(0, 4)) === year,
-    );
-  }, [movimientos, year]);
+  const prevMes = useMemo(() => {
+    const d = new Date(year, month - 2, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  }, [year, month]);
 
-  const delAñoAnterior = useMemo(() => {
-    return movimientos.filter(
-      (m) => Number(m.fecha.slice(0, 4)) === year - 1,
-    );
-  }, [movimientos, year]);
+  const mmActual = useMemo(
+    () => movimientos.filter((m) => m.fecha.slice(0, 7) === mes),
+    [movimientos, mes],
+  );
+  const mmPrev = useMemo(
+    () => movimientos.filter((m) => m.fecha.slice(0, 7) === prevMes),
+    [movimientos, prevMes],
+  );
 
+  /* ─────────── KPIs mes actual ─────────── */
   const kpis = useMemo(() => {
     const ingA = sumBy(
-      delAño,
+      mmActual,
       (x) => x.tipo === "Ingreso" && x.estado === "Confirmado",
       (x) => arsOf(x, tcRef),
     );
     const ingU = sumBy(
-      delAño,
+      mmActual,
       (x) => x.tipo === "Ingreso" && x.estado === "Confirmado",
       (x) => usdOf(x, tcRef),
     );
-    const gasA = sumBy(delAño, (x) => x.tipo === "Gasto", (x) =>
-      arsOf(x, tcRef),
-    );
-    const gasU = sumBy(delAño, (x) => x.tipo === "Gasto", (x) =>
-      usdOf(x, tcRef),
-    );
-    const ahoA = sumBy(delAño, (x) => x.tipo === "Ahorro", (x) =>
-      arsOf(x, tcRef),
-    );
-    const ahoU = sumBy(delAño, (x) => x.tipo === "Ahorro", (x) =>
-      usdOf(x, tcRef),
-    );
+    const gasA = sumBy(mmActual, (x) => x.tipo === "Gasto", (x) => arsOf(x, tcRef));
+    const gasU = sumBy(mmActual, (x) => x.tipo === "Gasto", (x) => usdOf(x, tcRef));
+    const ahoA = sumBy(mmActual, (x) => x.tipo === "Ahorro", (x) => arsOf(x, tcRef));
+    const ahoU = sumBy(mmActual, (x) => x.tipo === "Ahorro", (x) => usdOf(x, tcRef));
     const balA = ingA - gasA - ahoA;
     const balU = ingU - gasU - ahoU;
+    const tasa = ingA > 0 ? ahoA / ingA : 0;
 
-    // Año anterior — para comparar
     const ingPrevA = sumBy(
-      delAñoAnterior,
+      mmPrev,
       (x) => x.tipo === "Ingreso" && x.estado === "Confirmado",
       (x) => arsOf(x, tcRef),
     );
     const gasPrevA = sumBy(
-      delAñoAnterior,
+      mmPrev,
       (x) => x.tipo === "Gasto",
+      (x) => arsOf(x, tcRef),
+    );
+    const ahoPrevA = sumBy(
+      mmPrev,
+      (x) => x.tipo === "Ahorro",
       (x) => arsOf(x, tcRef),
     );
 
     return {
-      ingA,
-      ingU,
-      gasA,
-      gasU,
-      ahoA,
-      ahoU,
-      balA,
-      balU,
+      ingA, ingU, gasA, gasU, ahoA, ahoU, balA, balU, tasa,
       ingDelta: ingPrevA > 0 ? (ingA - ingPrevA) / ingPrevA : null,
       gasDelta: gasPrevA > 0 ? (gasA - gasPrevA) / gasPrevA : null,
-      tasa: ingA > 0 ? ahoA / ingA : 0,
+      ahoDelta: ahoPrevA > 0 ? (ahoA - ahoPrevA) / ahoPrevA : null,
     };
-  }, [delAño, delAñoAnterior, tcRef]);
+  }, [mmActual, mmPrev, tcRef]);
 
-  const mesesData = useMemo(() => {
-    return Array.from({ length: 12 }, (_, i) => {
-      const mv = delAño.filter(
-        (m) => Number(m.fecha.slice(5, 7)) === i + 1,
-      );
-      return {
-        m: MESES[i],
+  /* ─────────── Categorías del mes por tipo ─────────── */
+  const gastosPorCat = useMemo(
+    () => desglosarPorCategoria(mmActual, "Gasto", conv),
+    [mmActual, conv],
+  );
+  const ingresosPorCat = useMemo(
+    () => desglosarPorCategoria(mmActual, "Ingreso", conv),
+    [mmActual, conv],
+  );
+  const ahorroPorCat = useMemo(
+    () => desglosarPorCategoria(mmActual, "Ahorro", conv),
+    [mmActual, conv],
+  );
+
+  /* ─────────── Comparativa vs mes anterior por categoría (top 6 gastos) ─────────── */
+  const compara = useMemo(() => {
+    const gCat = (mv: Movimiento[]) => {
+      const map: Record<string, number> = {};
+      mv.filter((x) => x.tipo === "Gasto").forEach((x) => {
+        map[x.cat] = (map[x.cat] || 0) + conv(x);
+      });
+      return map;
+    };
+    const a = gCat(mmActual);
+    const p = gCat(mmPrev);
+    const cats = new Set<string>([...Object.keys(a), ...Object.keys(p)]);
+    const rows = [...cats].map((c) => ({
+      cat: c,
+      actual: a[c] || 0,
+      prev: p[c] || 0,
+    }));
+    return rows.sort((x, y) => Math.max(y.actual, y.prev) - Math.max(x.actual, x.prev)).slice(0, 6);
+  }, [mmActual, mmPrev, conv]);
+
+  /* ─────────── Fijo vs Variable ─────────── */
+  const fvSplit = useMemo(() => {
+    const fijA = sumBy(
+      mmActual,
+      (x) => x.tipo === "Gasto" && x.fv === "Fijo",
+      conv,
+    );
+    const varA = sumBy(
+      mmActual,
+      (x) => x.tipo === "Gasto" && x.fv === "Variable",
+      conv,
+    );
+    return { fijA, varA, tot: fijA + varA || 1 };
+  }, [mmActual, conv]);
+
+  /* ─────────── Top 5 movimientos ─────────── */
+  const topMovs = useMemo(() => {
+    return [...mmActual]
+      .filter((x) => x.tipo === "Gasto")
+      .map((x) => ({ ...x, val: conv(x) }))
+      .sort((a, b) => b.val - a.val)
+      .slice(0, 5);
+  }, [mmActual, conv]);
+
+  /* ─────────── Últimos 6 meses ─────────── */
+  const ult6 = useMemo(() => {
+    const arr: {
+      mes: string;
+      label: string;
+      ing: number;
+      gas: number;
+      aho: number;
+    }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(year, month - 1 - i, 1);
+      const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const mv = movimientos.filter((m) => m.fecha.slice(0, 7) === mk);
+      arr.push({
+        mes: mk,
+        label: MESES_CORTO[d.getMonth()],
         ing: sumBy(
           mv,
           (x) => x.tipo === "Ingreso" && x.estado === "Confirmado",
@@ -125,88 +183,20 @@ export default function EstadisticasClient({
         ),
         gas: sumBy(mv, (x) => x.tipo === "Gasto", conv),
         aho: sumBy(mv, (x) => x.tipo === "Ahorro", conv),
-      };
-    });
-  }, [delAño, conv]);
-
-  const categorias = useMemo(() => {
-    const map: Record<string, number> = {};
-    delAño
-      .filter((x) => x.tipo === "Gasto")
-      .forEach((x) => {
-        map[x.cat] = (map[x.cat] || 0) + conv(x);
       });
-    return Object.entries(map)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 8);
-  }, [delAño, conv]);
-
-  const promedios = useMemo(() => {
-    const mesesConData = mesesData.filter(
-      (m) => m.ing > 0 || m.gas > 0 || m.aho > 0,
-    ).length;
-    if (mesesConData === 0)
-      return { promIng: 0, promGas: 0, promAho: 0, tasa: 0 };
-    const ing = mesesData.reduce((a, b) => a + b.ing, 0) / mesesConData;
-    const gas = mesesData.reduce((a, b) => a + b.gas, 0) / mesesConData;
-    const aho = mesesData.reduce((a, b) => a + b.aho, 0) / mesesConData;
-    const tasa = ing > 0 ? aho / ing : 0;
-    return { promIng: ing, promGas: gas, promAho: aho, tasa };
-  }, [mesesData]);
-
-  const maxCat = categorias.length ? categorias[0][1] : 1;
-  const maxMes = Math.max(
-    1,
-    ...mesesData.map((d) => Math.max(d.ing, d.gas, d.aho)),
-  );
-
-  const canPrev = availableYears[0] < year;
-  const canNext = year < currentYear;
+    }
+    return arr;
+  }, [movimientos, year, month, conv]);
 
   return (
     <>
       <PageHeader
         title="Estadísticas"
-        subtitle="tu año en números"
-        action={
-          <div
-            className="inline-flex items-center rounded-[10px] gap-1 p-1"
-            style={{
-              background: "var(--surface)",
-              border: "1px solid var(--line)",
-              boxShadow: "var(--shadow)",
-            }}
-          >
-            <button
-              disabled={!canPrev}
-              onClick={() => setYear((y) => y - 1)}
-              className="grid place-items-center w-8 h-8 rounded-md disabled:opacity-30"
-              style={{ color: "var(--ink-soft)" }}
-              aria-label="Año anterior"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <span
-              className="mono font-serif font-bold text-lg px-2"
-              style={{ color: "var(--ink)" }}
-            >
-              {year}
-            </span>
-            <button
-              disabled={!canNext}
-              onClick={() => setYear((y) => y + 1)}
-              className="grid place-items-center w-8 h-8 rounded-md disabled:opacity-30"
-              style={{ color: "var(--ink-soft)" }}
-              aria-label="Año siguiente"
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
-        }
+        subtitle={`${MESES_LARGO[month - 1]} ${year} · comparado con ${MESES_LARGO[new Date(year, month - 2).getMonth()]}`}
       />
 
       <div className="flex flex-col gap-6">
-        {/* KPIs anuales */}
+        {/* KPIs del mes con delta vs mes anterior */}
         <section className="grid gap-3 grid-cols-2 lg:grid-cols-4">
           <Kpi
             Icon={Wallet}
@@ -228,166 +218,212 @@ export default function EstadisticasClient({
             label="Ahorro"
             value={money(cur, kpis.ahoA, kpis.ahoU)}
             sub={`tasa ${pct(kpis.tasa)}`}
+            delta={kpis.ahoDelta}
             color="save"
           />
           <Kpi
             Icon={Scale}
             label="Balance"
             value={money(cur, kpis.balA, kpis.balU)}
+            sub={kpis.balA >= 0 ? "positivo" : "gastaste de más"}
             color={kpis.balA >= 0 ? "blue" : "neg"}
           />
         </section>
 
-        {/* Promedio mensual */}
+        {/* Fijos vs Variables del mes */}
         <section className="card p-5">
           <h2 className="text-lg font-serif font-semibold mb-1">
-            Promedio mensual
+            Fijos vs Variables
           </h2>
-          <p
-            className="text-xs mb-4"
-            style={{ color: "var(--ink-faint)" }}
-          >
-            calculado sobre los meses del año que tienen movimientos
+          <p className="text-xs mb-4" style={{ color: "var(--ink-faint)" }}>
+            distribución de tus gastos del mes
           </p>
-          <div className="grid grid-cols-3 gap-3">
-            <PromCard label="Ingresos" value={fmt(promedios.promIng)} />
-            <PromCard label="Gastos" value={fmt(promedios.promGas)} />
-            <PromCard label="Ahorro" value={fmt(promedios.promAho)} />
+          <div className="flex flex-col gap-3">
+            <SplitBar
+              label="Fijos"
+              value={fvSplit.fijA}
+              total={fvSplit.tot}
+              color="var(--ars)"
+              format={fmt}
+            />
+            <SplitBar
+              label="Variables"
+              value={fvSplit.varA}
+              total={fvSplit.tot}
+              color="var(--accent)"
+              format={fmt}
+            />
           </div>
         </section>
 
-        {/* Gráfico de barras por mes */}
+        {/* Gastos por categoría del mes */}
         <section className="card p-5">
-          <h2 className="text-lg font-serif font-semibold mb-1">
-            Ingresos, gastos y ahorro por mes
-          </h2>
-          <p className="text-xs mb-4" style={{ color: "var(--ink-faint)" }}>
-            {year} en {cur}
-          </p>
-          <div className="overflow-x-auto">
-            <svg
-              viewBox="0 0 640 200"
-              style={{ minWidth: 560, width: "100%", height: "auto" }}
+          <div className="flex items-baseline gap-2 mb-1">
+            <h2 className="text-lg font-serif font-semibold mr-auto">
+              Gastos por categoría
+            </h2>
+            <span
+              className="mono text-sm"
+              style={{ color: "var(--neg)" }}
             >
-              {mesesData.map((d, i) => {
-                const H = 160;
-                const barGroupW = 640 / 12;
-                const barW = barGroupW / 4;
-                const x0 = i * barGroupW + barGroupW * 0.15;
-                const bars = [
-                  { k: "ing", v: d.ing, color: "var(--pos)" },
-                  { k: "gas", v: d.gas, color: "var(--neg)" },
-                  { k: "aho", v: d.aho, color: "var(--accent)" },
-                ];
-                return (
-                  <g key={i}>
-                    {bars.map((b, j) => {
-                      const h = (b.v / maxMes) * H;
-                      return (
-                        <rect
-                          key={b.k}
-                          x={x0 + j * barW}
-                          y={H - h}
-                          width={barW * 0.85}
-                          height={h}
-                          fill={b.color}
-                          rx={2}
-                        >
-                          <title>{`${d.m} · ${b.k}: ${fmt(b.v)}`}</title>
-                        </rect>
-                      );
-                    })}
-                    <text
-                      x={x0 + (barW * 3) / 2}
-                      y={H + 18}
-                      textAnchor="middle"
-                      fontSize="11"
-                      fill="var(--ink-faint)"
-                    >
-                      {d.m}
-                    </text>
-                  </g>
-                );
-              })}
-            </svg>
+              {fmt(kpis.gasA)}
+            </span>
           </div>
-          <div className="flex gap-4 text-xs mt-2" style={{ color: "var(--ink-soft)" }}>
-            <Dot color="var(--pos)" label="Ingresos" />
-            <Dot color="var(--neg)" label="Gastos" />
-            <Dot color="var(--accent)" label="Ahorro" />
-          </div>
+          <p className="text-xs mb-4" style={{ color: "var(--ink-faint)" }}>
+            {gastosPorCat.length} categoría{gastosPorCat.length === 1 ? "" : "s"} este mes
+          </p>
+          <CategoryList items={gastosPorCat} total={kpis.gasA} color="var(--neg)" format={fmt} />
         </section>
 
-        {/* Top categorías */}
-        <section className="card p-5">
-          <h2 className="text-lg font-serif font-semibold mb-1">
-            Top gastos por categoría
-          </h2>
-          <p className="text-xs mb-4" style={{ color: "var(--ink-faint)" }}>
-            en {year}
-          </p>
-          {categorias.length === 0 ? (
-            <p className="text-sm" style={{ color: "var(--ink-faint)" }}>
-              Sin gastos cargados en {year}.
+        {/* Ingresos por categoría */}
+        {ingresosPorCat.length > 0 && (
+          <section className="card p-5">
+            <div className="flex items-baseline gap-2 mb-1">
+              <h2 className="text-lg font-serif font-semibold mr-auto">
+                Ingresos por categoría
+              </h2>
+              <span className="mono text-sm" style={{ color: "var(--pos)" }}>
+                {fmt(kpis.ingA)}
+              </span>
+            </div>
+            <p className="text-xs mb-4" style={{ color: "var(--ink-faint)" }}>
+              del mes
             </p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {categorias.map(([cat, val]) => {
-                const w = Math.max(3, (val / maxCat) * 100);
+            <CategoryList
+              items={ingresosPorCat}
+              total={kpis.ingA}
+              color="var(--pos)"
+              format={fmt}
+              tipo="Ingreso"
+            />
+          </section>
+        )}
+
+        {/* Ahorro por categoría */}
+        {ahorroPorCat.length > 0 && (
+          <section className="card p-5">
+            <div className="flex items-baseline gap-2 mb-1">
+              <h2 className="text-lg font-serif font-semibold mr-auto">
+                Ahorro por categoría
+              </h2>
+              <span
+                className="mono text-sm"
+                style={{ color: "var(--accent-ink)" }}
+              >
+                {fmt(kpis.ahoA)}
+              </span>
+            </div>
+            <CategoryList
+              items={ahorroPorCat}
+              total={kpis.ahoA}
+              color="var(--accent)"
+              format={fmt}
+              tipo="Ahorro"
+            />
+          </section>
+        )}
+
+        {/* Comparativa este mes vs anterior */}
+        {compara.length > 0 && (
+          <section className="card p-5">
+            <h2 className="text-lg font-serif font-semibold mb-1">
+              Este mes vs {MESES_LARGO[new Date(year, month - 2).getMonth()]}
+            </h2>
+            <p className="text-xs mb-4" style={{ color: "var(--ink-faint)" }}>
+              top categorías de gasto
+            </p>
+            <div className="flex flex-col gap-3">
+              {compara.map((r) => (
+                <CompareRow key={r.cat} row={r} format={fmt} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Top 5 movimientos del mes */}
+        {topMovs.length > 0 && (
+          <section className="card p-5">
+            <h2 className="text-lg font-serif font-semibold mb-1">
+              Los 5 gastos más grandes
+            </h2>
+            <p className="text-xs mb-4" style={{ color: "var(--ink-faint)" }}>
+              de este mes
+            </p>
+            <div className="flex flex-col">
+              {topMovs.map((r) => {
+                const Icon = iconForCategory(r.cat, "Gasto");
                 return (
-                  <div key={cat} className="flex flex-col gap-1 text-sm">
-                    <div className="flex items-baseline gap-3">
-                      <span
-                        className="truncate flex-1"
-                        style={{ color: "var(--ink-soft)" }}
-                      >
-                        {cat}
-                      </span>
-                      <span
-                        className="mono text-right whitespace-nowrap"
-                        style={{ color: "var(--ink)" }}
-                      >
-                        {fmt(val)}
-                        <span
-                          className="ml-2 text-xs"
-                          style={{ color: "var(--ink-faint)" }}
-                        >
-                          {pct(val / (kpis.gasA || 1))}
-                        </span>
-                      </span>
-                    </div>
-                    <span
-                      className="block w-full h-2 rounded-full overflow-hidden"
-                      style={{ background: "var(--surface-2)" }}
+                  <div
+                    key={r.id}
+                    className="flex items-center gap-3 py-2.5"
+                    style={{ borderTop: "1px solid var(--line)" }}
+                  >
+                    <div
+                      className="grid place-items-center rounded-lg"
+                      style={{
+                        width: 36,
+                        height: 36,
+                        background: "var(--neg-soft)",
+                        color: "var(--neg)",
+                      }}
                     >
-                      <span
-                        className="block h-full"
-                        style={{ width: `${w}%`, background: "var(--neg)" }}
-                      />
-                    </span>
+                      <Icon size={16} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium truncate">
+                        {r.descripcion || r.cat}
+                      </div>
+                      <div
+                        className="text-xs"
+                        style={{ color: "var(--ink-faint)" }}
+                      >
+                        {r.cat} · {r.fecha.slice(8)}/{r.fecha.slice(5, 7)}
+                      </div>
+                    </div>
+                    <div
+                      className="mono font-medium"
+                      style={{ color: "var(--neg)" }}
+                    >
+                      {fmt(r.val)}
+                    </div>
                   </div>
                 );
               })}
             </div>
-          )}
-        </section>
+          </section>
+        )}
 
-        {/* Balance acumulado (línea) */}
+        {/* Últimos 6 meses */}
         <section className="card p-5">
           <h2 className="text-lg font-serif font-semibold mb-1">
-            Balance acumulado
+            Últimos 6 meses
           </h2>
           <p className="text-xs mb-4" style={{ color: "var(--ink-faint)" }}>
-            (ingresos − gastos − ahorro) mes a mes en {year}
+            tendencia en {cur}
           </p>
-          <BalanceLine data={mesesData} format={fmt} />
+          <Sparkles6 data={ult6} format={fmt} />
         </section>
       </div>
     </>
   );
 }
 
-/* ─────────── KPI Card ─────────── */
+/* ─────────── Helpers ─────────── */
+function desglosarPorCategoria(
+  mvs: Movimiento[],
+  tipo: MovTipo,
+  conv: (m: Movimiento) => number,
+) {
+  const map: Record<string, number> = {};
+  mvs.filter((x) => x.tipo === tipo).forEach((x) => {
+    map[x.cat] = (map[x.cat] || 0) + conv(x);
+  });
+  return Object.entries(map)
+    .map(([cat, val]) => ({ cat, val }))
+    .sort((a, b) => b.val - a.val);
+}
+
+/* ─────────── Components ─────────── */
 function Kpi({
   Icon,
   label,
@@ -413,13 +449,8 @@ function Kpi({
   }[color];
 
   const deltaPos = delta !== null && delta !== undefined ? delta >= 0 : null;
-  // deltaInverted: para gastos, subir es malo
   const goodDelta =
-    deltaPos === null
-      ? null
-      : deltaInverted
-        ? !deltaPos
-        : deltaPos;
+    deltaPos === null ? null : deltaInverted ? !deltaPos : deltaPos;
 
   return (
     <div
@@ -454,15 +485,13 @@ function Kpi({
       {delta !== null && delta !== undefined && (
         <div
           className="text-xs flex items-center gap-1"
-          style={{
-            color: goodDelta ? "var(--pos)" : "var(--neg)",
-          }}
+          style={{ color: goodDelta ? "var(--pos)" : "var(--neg)" }}
         >
           {deltaPos ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-          {pct(Math.abs(delta))} vs año anterior
+          {pct(Math.abs(delta))} vs mes anterior
         </div>
       )}
-      {sub && (
+      {sub && !delta && (
         <div className="text-xs" style={{ color: "var(--ink-soft)" }}>
           {sub}
         </div>
@@ -471,24 +500,330 @@ function Kpi({
   );
 }
 
-function PromCard({ label, value }: { label: string; value: string }) {
+function SplitBar({
+  label,
+  value,
+  total,
+  color,
+  format,
+}: {
+  label: string;
+  value: number;
+  total: number;
+  color: string;
+  format: (n: number) => string;
+}) {
+  const w = Math.max(3, (value / total) * 100);
   return (
-    <div
-      className="p-3 rounded-lg"
-      style={{ background: "var(--surface-2)" }}
-    >
-      <div
-        className="text-[10px] uppercase tracking-wider font-semibold mb-1"
-        style={{ color: "var(--ink-faint)" }}
-      >
-        {label}
+    <div className="flex flex-col gap-1.5 text-sm">
+      <div className="flex items-baseline gap-3">
+        <span className="flex-1" style={{ color: "var(--ink-soft)" }}>
+          {label}
+        </span>
+        <span className="mono" style={{ color: "var(--ink)" }}>
+          {format(value)}
+          <span className="ml-2 text-xs" style={{ color: "var(--ink-faint)" }}>
+            {pct(value / total)}
+          </span>
+        </span>
       </div>
-      <div className="mono font-serif text-base font-bold">{value}</div>
+      <span
+        className="block w-full h-2 rounded-full overflow-hidden"
+        style={{ background: "var(--surface-2)" }}
+      >
+        <span
+          className="block h-full transition-all"
+          style={{ width: `${w}%`, background: color }}
+        />
+      </span>
     </div>
   );
 }
 
-function Dot({ color, label }: { color: string; label: string }) {
+function CategoryList({
+  items,
+  total,
+  color,
+  format,
+  tipo = "Gasto",
+}: {
+  items: { cat: string; val: number }[];
+  total: number;
+  color: string;
+  format: (n: number) => string;
+  tipo?: MovTipo;
+}) {
+  if (items.length === 0)
+    return (
+      <p className="text-sm" style={{ color: "var(--ink-faint)" }}>
+        Sin datos este mes.
+      </p>
+    );
+  const max = items[0]?.val || 1;
+  return (
+    <div className="flex flex-col gap-3">
+      {items.map((r) => {
+        const Icon = iconForCategory(r.cat, tipo);
+        const w = Math.max(3, (r.val / max) * 100);
+        return (
+          <div key={r.cat} className="flex flex-col gap-1.5 text-sm">
+            <div className="flex items-baseline gap-3">
+              <span
+                className="inline-flex items-center gap-2 truncate flex-1 min-w-0"
+                style={{ color: "var(--ink-soft)" }}
+              >
+                <Icon size={14} style={{ color, flexShrink: 0 }} />
+                <span className="truncate">{r.cat}</span>
+              </span>
+              <span className="mono" style={{ color: "var(--ink)" }}>
+                {format(r.val)}
+                <span
+                  className="ml-2 text-xs"
+                  style={{ color: "var(--ink-faint)" }}
+                >
+                  {pct(r.val / (total || 1))}
+                </span>
+              </span>
+            </div>
+            <span
+              className="block w-full h-1.5 rounded-full overflow-hidden"
+              style={{ background: "var(--surface-2)" }}
+            >
+              <span
+                className="block h-full transition-all"
+                style={{ width: `${w}%`, background: color }}
+              />
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function CompareRow({
+  row,
+  format,
+}: {
+  row: { cat: string; actual: number; prev: number };
+  format: (n: number) => string;
+}) {
+  const max = Math.max(row.actual, row.prev, 1);
+  const delta = row.prev > 0 ? (row.actual - row.prev) / row.prev : null;
+  const subio = row.actual > row.prev;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-baseline justify-between gap-3 text-sm">
+        <span className="font-medium truncate flex-1">{row.cat}</span>
+        {delta !== null && (
+          <span
+            className="text-xs inline-flex items-center gap-0.5"
+            style={{ color: subio ? "var(--neg)" : "var(--pos)" }}
+          >
+            {subio ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
+            {pct(Math.abs(delta))}
+          </span>
+        )}
+      </div>
+      <div className="flex flex-col gap-1">
+        <MiniBar
+          label="Este mes"
+          value={row.actual}
+          max={max}
+          color="var(--neg)"
+          format={format}
+        />
+        <MiniBar
+          label="Anterior"
+          value={row.prev}
+          max={max}
+          color="var(--ink-faint)"
+          format={format}
+        />
+      </div>
+    </div>
+  );
+}
+
+function MiniBar({
+  label,
+  value,
+  max,
+  color,
+  format,
+}: {
+  label: string;
+  value: number;
+  max: number;
+  color: string;
+  format: (n: number) => string;
+}) {
+  const w = max > 0 ? (value / max) * 100 : 0;
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span
+        className="w-16 shrink-0"
+        style={{ color: "var(--ink-faint)" }}
+      >
+        {label}
+      </span>
+      <span
+        className="flex-1 h-1.5 rounded-full overflow-hidden"
+        style={{ background: "var(--surface-2)" }}
+      >
+        <span
+          className="block h-full"
+          style={{ width: `${w}%`, background: color }}
+        />
+      </span>
+      <span
+        className="mono w-24 text-right"
+        style={{ color: "var(--ink-soft)" }}
+      >
+        {format(value)}
+      </span>
+    </div>
+  );
+}
+
+function Sparkles6({
+  data,
+  format,
+}: {
+  data: { mes: string; label: string; ing: number; gas: number; aho: number }[];
+  format: (n: number) => string;
+}) {
+  const [hover, setHover] = useState<number | null>(null);
+  const max = Math.max(1, ...data.map((d) => Math.max(d.ing, d.gas, d.aho)));
+  const H = 120;
+  const W = 400;
+  const barGroupW = W / data.length;
+  const barW = barGroupW / 4;
+
+  return (
+    <div className="relative">
+      <svg
+        viewBox={`0 0 ${W} ${H + 20}`}
+        style={{ width: "100%", height: "auto" }}
+        onMouseLeave={() => setHover(null)}
+      >
+        {data.map((d, i) => {
+          const x0 = i * barGroupW + barGroupW * 0.15;
+          const isHover = hover === i;
+          const bars = [
+            { v: d.ing, color: "var(--pos)" },
+            { v: d.gas, color: "var(--neg)" },
+            { v: d.aho, color: "var(--accent)" },
+          ];
+          return (
+            <g key={i}>
+              <rect
+                x={i * barGroupW}
+                y={0}
+                width={barGroupW}
+                height={H + 20}
+                fill="transparent"
+                onMouseEnter={() => setHover(i)}
+                style={{ cursor: "pointer" }}
+              />
+              {isHover && (
+                <rect
+                  x={i * barGroupW}
+                  y={0}
+                  width={barGroupW}
+                  height={H}
+                  fill="var(--surface-2)"
+                  rx={4}
+                  style={{ pointerEvents: "none" }}
+                />
+              )}
+              {bars.map((b, j) => {
+                const h = (b.v / max) * H;
+                return (
+                  <rect
+                    key={j}
+                    x={x0 + j * barW}
+                    y={H - h}
+                    width={barW * 0.85}
+                    height={h}
+                    fill={b.color}
+                    rx={2}
+                    style={{ pointerEvents: "none" }}
+                  />
+                );
+              })}
+              <text
+                x={x0 + (barW * 3) / 2}
+                y={H + 14}
+                textAnchor="middle"
+                fontSize="10"
+                fill={isHover ? "var(--ink)" : "var(--ink-faint)"}
+                fontWeight={isHover ? 600 : 400}
+                style={{ pointerEvents: "none" }}
+              >
+                {d.label}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+      {hover !== null && (
+        <div
+          className="absolute top-0 pointer-events-none card px-3 py-2 text-xs shadow-lg"
+          style={{
+            left: `calc(${(hover / data.length) * 100}% + ${(0.5 / data.length) * 100}%)`,
+            transform: "translateX(-50%)",
+            minWidth: 130,
+            zIndex: 5,
+          }}
+        >
+          <div className="font-semibold mb-1">{data[hover].mes}</div>
+          <div className="flex flex-col gap-0.5">
+            <TooltipRow color="var(--pos)" label="Ingresos" value={format(data[hover].ing)} />
+            <TooltipRow color="var(--neg)" label="Gastos" value={format(data[hover].gas)} />
+            <TooltipRow color="var(--accent)" label="Ahorro" value={format(data[hover].aho)} />
+          </div>
+        </div>
+      )}
+      <div className="flex gap-4 text-xs mt-2" style={{ color: "var(--ink-soft)" }}>
+        <LegendDot color="var(--pos)" label="Ingresos" />
+        <LegendDot color="var(--neg)" label="Gastos" />
+        <LegendDot color="var(--accent)" label="Ahorro" />
+      </div>
+    </div>
+  );
+}
+
+function TooltipRow({
+  color,
+  label,
+  value,
+}: {
+  color: string;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center gap-2 justify-between">
+      <span
+        className="inline-flex items-center gap-1.5"
+        style={{ color: "var(--ink-soft)" }}
+      >
+        <span
+          className="inline-block rounded-full"
+          style={{ width: 8, height: 8, background: color }}
+        />
+        {label}
+      </span>
+      <span className="mono" style={{ color: "var(--ink)" }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function LegendDot({ color, label }: { color: string; label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       <span
@@ -497,84 +832,5 @@ function Dot({ color, label }: { color: string; label: string }) {
       />
       {label}
     </span>
-  );
-}
-
-/* ─────────── Balance line chart ─────────── */
-function BalanceLine({
-  data,
-  format,
-}: {
-  data: { m: string; ing: number; gas: number; aho: number }[];
-  format: (n: number) => string;
-}) {
-  const W = 640;
-  const H = 160;
-  let acc = 0;
-  const points = data.map((d, i) => {
-    acc += d.ing - d.gas - d.aho;
-    return { x: (i / 11) * (W - 40) + 20, val: acc, mes: d.m };
-  });
-  const vals = points.map((p) => p.val);
-  const minV = Math.min(0, ...vals);
-  const maxV = Math.max(0, ...vals);
-  const range = maxV - minV || 1;
-
-  function y(v: number) {
-    return H - 20 - ((v - minV) / range) * (H - 40);
-  }
-  const zeroY = y(0);
-
-  const pathD = points
-    .map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${y(p.val)}`)
-    .join(" ");
-
-  return (
-    <div className="overflow-x-auto">
-      <svg
-        viewBox={`0 0 ${W} ${H + 20}`}
-        style={{ minWidth: 560, width: "100%", height: "auto" }}
-      >
-        {/* línea del cero */}
-        <line
-          x1={20}
-          x2={W - 20}
-          y1={zeroY}
-          y2={zeroY}
-          stroke="var(--line)"
-          strokeDasharray="3 3"
-        />
-        {/* trazado */}
-        <path
-          d={pathD}
-          fill="none"
-          stroke="var(--accent)"
-          strokeWidth={2.5}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-        {points.map((p, i) => (
-          <g key={i}>
-            <circle
-              cx={p.x}
-              cy={y(p.val)}
-              r={3.5}
-              fill="var(--accent)"
-            >
-              <title>{`${p.mes}: ${format(p.val)}`}</title>
-            </circle>
-            <text
-              x={p.x}
-              y={H + 16}
-              textAnchor="middle"
-              fontSize="11"
-              fill="var(--ink-faint)"
-            >
-              {p.mes}
-            </text>
-          </g>
-        ))}
-      </svg>
-    </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Wallet,
@@ -421,6 +421,7 @@ function TrendChart({
   data: { m: string; ing: number; gas: number; aho: number }[];
   format: (n: number) => string;
 }) {
+  const [hover, setHover] = useState<number | null>(null);
   const max = Math.max(
     1,
     ...data.map((d) => Math.max(d.ing, d.gas, d.aho)),
@@ -430,55 +431,135 @@ function TrendChart({
   const barGroupW = W / data.length;
   const barW = barGroupW / 4;
 
+  // Nombre completo de cada mes para el tooltip
+  const nombres = [
+    "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+    "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+  ];
+
   return (
-    <div className="overflow-x-auto">
-      <svg
-        viewBox={`0 0 ${W} ${H + 24}`}
-        style={{ minWidth: 560, width: "100%", height: "auto" }}
-      >
-        {data.map((d, i) => {
-          const x0 = i * barGroupW + barGroupW * 0.15;
-          const bars = [
-            { k: "ing", v: d.ing, color: "var(--pos)" },
-            { k: "gas", v: d.gas, color: "var(--neg)" },
-            { k: "aho", v: d.aho, color: "var(--accent)" },
-          ];
-          return (
-            <g key={i}>
-              {bars.map((b, j) => {
-                const h = (b.v / max) * H;
-                return (
+    <div className="relative">
+      <div className="overflow-x-auto">
+        <svg
+          viewBox={`0 0 ${W} ${H + 24}`}
+          style={{ minWidth: 560, width: "100%", height: "auto" }}
+          onMouseLeave={() => setHover(null)}
+        >
+          {data.map((d, i) => {
+            const x0 = i * barGroupW + barGroupW * 0.15;
+            const bars = [
+              { k: "ing", v: d.ing, color: "var(--pos)" },
+              { k: "gas", v: d.gas, color: "var(--neg)" },
+              { k: "aho", v: d.aho, color: "var(--accent)" },
+            ];
+            const isHover = hover === i;
+            return (
+              <g key={i}>
+                {/* Hit area invisible que cubre todo el grupo, así el hover
+                    activa el tooltip aunque estemos entre barras */}
+                <rect
+                  x={i * barGroupW}
+                  y={0}
+                  width={barGroupW}
+                  height={H + 24}
+                  fill="transparent"
+                  onMouseEnter={() => setHover(i)}
+                  style={{ cursor: "pointer" }}
+                />
+                {/* Highlight de fondo cuando está hovered */}
+                {isHover && (
                   <rect
-                    key={b.k}
-                    x={x0 + j * barW}
-                    y={H - h}
-                    width={barW * 0.85}
-                    height={h}
-                    fill={b.color}
-                    rx={2}
-                  >
-                    <title>{`${d.m} · ${b.k}: ${format(b.v)}`}</title>
-                  </rect>
-                );
-              })}
-              <text
-                x={x0 + (barW * 3) / 2}
-                y={H + 16}
-                textAnchor="middle"
-                fontSize="11"
-                fill="var(--ink-faint)"
-              >
-                {d.m}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
+                    x={i * barGroupW}
+                    y={0}
+                    width={barGroupW}
+                    height={H}
+                    fill="var(--surface-2)"
+                    rx={4}
+                    style={{ pointerEvents: "none" }}
+                  />
+                )}
+                {bars.map((b, j) => {
+                  const h = (b.v / max) * H;
+                  return (
+                    <rect
+                      key={b.k}
+                      x={x0 + j * barW}
+                      y={H - h}
+                      width={barW * 0.85}
+                      height={h}
+                      fill={b.color}
+                      rx={2}
+                      style={{ pointerEvents: "none" }}
+                    />
+                  );
+                })}
+                <text
+                  x={x0 + (barW * 3) / 2}
+                  y={H + 16}
+                  textAnchor="middle"
+                  fontSize="11"
+                  fill={isHover ? "var(--ink)" : "var(--ink-faint)"}
+                  fontWeight={isHover ? 600 : 400}
+                  style={{ pointerEvents: "none" }}
+                >
+                  {d.m}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+
+      {/* Tooltip HTML posicionado */}
+      {hover !== null && (
+        <div
+          className="absolute top-0 pointer-events-none card px-3 py-2 text-xs shadow-lg"
+          style={{
+            left: `calc(${(hover / data.length) * 100}% + ${(0.5 / data.length) * 100}%)`,
+            transform: "translateX(-50%)",
+            minWidth: 130,
+            zIndex: 5,
+          }}
+        >
+          <div className="font-semibold mb-1" style={{ color: "var(--ink)" }}>
+            {nombres[hover]}
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <TooltipRow color="var(--pos)" label="Ingresos" value={format(data[hover].ing)} />
+            <TooltipRow color="var(--neg)" label="Gastos" value={format(data[hover].gas)} />
+            <TooltipRow color="var(--accent)" label="Ahorro" value={format(data[hover].aho)} />
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-4 text-xs mt-2" style={{ color: "var(--ink-soft)" }}>
         <LegendDot color="var(--pos)" label="Ingresos" />
         <LegendDot color="var(--neg)" label="Gastos" />
         <LegendDot color="var(--accent)" label="Ahorro" />
       </div>
+    </div>
+  );
+}
+
+function TooltipRow({
+  color,
+  label,
+  value,
+}: {
+  color: string;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center gap-2 justify-between">
+      <span className="inline-flex items-center gap-1.5" style={{ color: "var(--ink-soft)" }}>
+        <span
+          className="inline-block rounded-full"
+          style={{ width: 8, height: 8, background: color }}
+        />
+        {label}
+      </span>
+      <span className="mono" style={{ color: "var(--ink)" }}>{value}</span>
     </div>
   );
 }
