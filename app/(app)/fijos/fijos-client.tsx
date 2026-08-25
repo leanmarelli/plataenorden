@@ -59,8 +59,11 @@ const empty: Form = {
 
 function esCompleta(f: Fijo) {
   return (
-    f.cuotas_totales !== null && f.cuotas_pagas >= f.cuotas_totales
+    f.cuotas_totales != null && (f.cuotas_pagas ?? 0) >= f.cuotas_totales
   );
+}
+function esPlanCuotas(f: Fijo) {
+  return f.cuotas_totales != null;
 }
 
 export default function FijosClient({ initial }: { initial: Fijo[] }) {
@@ -98,7 +101,7 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
       monto: String(f.monto),
       dia: String(f.dia),
       tipo: f.tipo,
-      esCuota: f.cuotas_totales !== null,
+      esCuota: f.cuotas_totales != null,
       cuotas_totales: String(f.cuotas_totales ?? "6"),
       cuotas_pagas: String(f.cuotas_pagas ?? 0),
     });
@@ -236,8 +239,8 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
     const fecha = `${settings.mes}-${dia}`;
     // Sufijo con número de cuota
     const desc =
-      f.cuotas_totales !== null
-        ? `${f.concepto} · cuota ${f.cuotas_pagas + 1}/${f.cuotas_totales}`
+      f.cuotas_totales != null
+        ? `${f.concepto} · cuota ${(f.cuotas_pagas ?? 0) + 1}/${f.cuotas_totales}`
         : f.concepto;
 
     const { error } = await supabase.from("movimientos").insert({
@@ -260,7 +263,7 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
     }
 
     // Si es cuota, incrementar el contador
-    if (f.cuotas_totales !== null) {
+    if (f.cuotas_totales != null) {
       const nuevoPagas = f.cuotas_pagas + 1;
       const { data: upd } = await supabase
         .from("fijos")
@@ -275,7 +278,7 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
 
     setMaterializing(null);
     toast(
-      f.cuotas_totales !== null
+      f.cuotas_totales != null
         ? `Cuota ${f.cuotas_pagas + 1}/${f.cuotas_totales} cargada`
         : `"${f.concepto}" cargado en ${settings.mes}`,
       "success",
@@ -339,8 +342,8 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
       ).padStart(2, "0");
       const fecha = `${settings.mes}-${dia}`;
       const desc =
-        f.cuotas_totales !== null
-          ? `${f.concepto} · cuota ${f.cuotas_pagas + 1}/${f.cuotas_totales}`
+        f.cuotas_totales != null && f.cuotas_pagas != null
+          ? `${f.concepto} · cuota ${(f.cuotas_pagas ?? 0) + 1}/${f.cuotas_totales}`
           : f.concepto;
 
       const { error } = await supabase.from("movimientos").insert({
@@ -362,7 +365,7 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
         continue;
       }
 
-      if (f.cuotas_totales !== null) {
+      if (f.cuotas_totales != null) {
         const nuevoPagas = f.cuotas_pagas + 1;
         const { data: upd } = await supabase
           .from("fijos")
@@ -483,7 +486,7 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
               const Icon = iconForCategory(r.cat, r.tipo);
               const col = tipoColor(r.tipo);
               const completa = esCompleta(r);
-              const esCuota = r.cuotas_totales !== null;
+              const esCuota = r.cuotas_totales != null;
               const isSel = selected.has(r.id);
               return (
                 <div
@@ -601,7 +604,7 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
                   const Icon = iconForCategory(r.cat, r.tipo);
                   const col = tipoColor(r.tipo);
                   const completa = esCompleta(r);
-                  const esCuota = r.cuotas_totales !== null;
+                  const esCuota = r.cuotas_totales != null;
                   const isSel = selected.has(r.id);
                   return (
                     <tr
