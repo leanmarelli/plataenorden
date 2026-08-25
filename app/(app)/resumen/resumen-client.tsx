@@ -87,8 +87,13 @@ export default function ResumenClient({
     const balA = ingConfA - gasA - ahoA;
     const balU = ingConfU - gasU - ahoU;
     const tasa = ingConfA > 0 ? ahoA / ingConfA : 0;
+    // Compromiso en fijos = fijos indefinidos + cuotas activas (no completadas)
     const fijMensA = fijos
       .filter((f) => f.tipo === "Gasto")
+      .filter(
+        (f) =>
+          f.cuotas_totales === null || f.cuotas_pagas < f.cuotas_totales,
+      )
       .reduce((a, f) => a + fixedArs(f, tcRef), 0);
     const compromiso = ingConfA > 0 ? fijMensA / ingConfA : 0;
     const nMov = mm.filter((x) => x.tipo === "Gasto").length;
@@ -414,6 +419,9 @@ function Bar({
   );
 }
 
+type BarKey = "ing" | "gas" | "aho";
+type BarHover = { i: number; k: BarKey } | null;
+
 function TrendChart({
   data,
   format,
@@ -421,7 +429,7 @@ function TrendChart({
   data: { m: string; ing: number; gas: number; aho: number }[];
   format: (n: number) => string;
 }) {
-  const [hover, setHover] = useState<number | null>(null);
+  const [hover, setHover] = useState<BarHover>(null);
   const max = Math.max(
     1,
     ...data.map((d) => Math.max(d.ing, d.gas, d.aho)),
@@ -431,11 +439,30 @@ function TrendChart({
   const barGroupW = W / data.length;
   const barW = barGroupW / 4;
 
-  // Nombre completo de cada mes para el tooltip
   const nombres = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
     "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
   ];
+  const labels: Record<BarKey, string> = {
+    ing: "Ingresos",
+    gas: "Gastos",
+    aho: "Ahorro",
+  };
+  const colors: Record<BarKey, string> = {
+    ing: "var(--pos)",
+    gas: "var(--neg)",
+    aho: "var(--accent)",
+  };
+
+  // Posición X del tooltip: sobre la barra hovereada
+  const tooltipLeftPct = hover
+    ? ((hover.i * barGroupW +
+        barGroupW * 0.15 +
+        { ing: 0, gas: 1, aho: 2 }[hover.k] * barW +
+        (barW * 0.85) / 2) /
+        W) *
+      100
+    : 0;
 
   return (
     <div className="relative">
@@ -447,50 +474,54 @@ function TrendChart({
         >
           {data.map((d, i) => {
             const x0 = i * barGroupW + barGroupW * 0.15;
-            const bars = [
-              { k: "ing", v: d.ing, color: "var(--pos)" },
-              { k: "gas", v: d.gas, color: "var(--neg)" },
-              { k: "aho", v: d.aho, color: "var(--accent)" },
+            const bars: { k: BarKey; v: number }[] = [
+              { k: "ing", v: d.ing },
+              { k: "gas", v: d.gas },
+              { k: "aho", v: d.aho },
             ];
-            const isHover = hover === i;
+            const activo = hover?.i === i;
             return (
               <g key={i}>
-                {/* Hit area invisible que cubre todo el grupo, así el hover
-                    activa el tooltip aunque estemos entre barras */}
-                <rect
-                  x={i * barGroupW}
-                  y={0}
-                  width={barGroupW}
-                  height={H + 24}
-                  fill="transparent"
-                  onMouseEnter={() => setHover(i)}
-                  style={{ cursor: "pointer" }}
-                />
-                {/* Highlight de fondo cuando está hovered */}
-                {isHover && (
-                  <rect
-                    x={i * barGroupW}
-                    y={0}
-                    width={barGroupW}
-                    height={H}
-                    fill="var(--surface-2)"
-                    rx={4}
-                    style={{ pointerEvents: "none" }}
-                  />
-                )}
                 {bars.map((b, j) => {
-                  const h = (b.v / max) * H;
+                  // Alto real de la barra (con mínimo de 2px cuando hay valor
+                  // para que sea hovereable aunque el valor sea muy chico)
+                  const h = b.v > 0 ? Math.max(2, (b.v / max) * H) : 0;
+                  const isHover =
+                    hover?.i === i && hover?.k === b.k;
+                  const bx = x0 + j * barW;
+                  const bw = barW * 0.85;
                   return (
-                    <rect
-                      key={b.k}
-                      x={x0 + j * barW}
-                      y={H - h}
-                      width={barW * 0.85}
-                      height={h}
-                      fill={b.color}
-                      rx={2}
-                      style={{ pointerEvents: "none" }}
-                    />
+                    <g key={b.k}>
+                      {/* Hit area por barra: cubre desde arriba hasta abajo
+                          para que sea fácil de acertar aunque la barra sea
+                          bajita. */}
+                      <rect
+                        x={bx}
+                        y={0}
+                        width={bw}
+                        height={H}
+                        fill="transparent"
+                        onMouseEnter={() => setHover({ i, k: b.k })}
+                        style={{ cursor: b.v > 0 ? "pointer" : "default" }}
+                      />
+                      {b.v > 0 && (
+                        <rect
+                          x={bx}
+                          y={H - h}
+                          width={bw}
+                          height={h}
+                          fill={colors[b.k]}
+                          rx={2}
+                          opacity={
+                            hover && !isHover ? 0.35 : 1
+                          }
+                          style={{
+                            pointerEvents: "none",
+                            transition: "opacity .15s",
+                          }}
+                        />
+                      )}
+                    </g>
                   );
                 })}
                 <text
@@ -498,8 +529,8 @@ function TrendChart({
                   y={H + 16}
                   textAnchor="middle"
                   fontSize="11"
-                  fill={isHover ? "var(--ink)" : "var(--ink-faint)"}
-                  fontWeight={isHover ? 600 : 400}
+                  fill={activo ? "var(--ink)" : "var(--ink-faint)"}
+                  fontWeight={activo ? 600 : 400}
                   style={{ pointerEvents: "none" }}
                 >
                   {d.m}
@@ -510,24 +541,40 @@ function TrendChart({
         </svg>
       </div>
 
-      {/* Tooltip HTML posicionado */}
-      {hover !== null && (
+      {hover && (
         <div
           className="absolute top-0 pointer-events-none card px-3 py-2 text-xs shadow-lg"
           style={{
-            left: `calc(${(hover / data.length) * 100}% + ${(0.5 / data.length) * 100}%)`,
+            left: `${tooltipLeftPct}%`,
             transform: "translateX(-50%)",
-            minWidth: 130,
+            minWidth: 120,
             zIndex: 5,
           }}
         >
-          <div className="font-semibold mb-1" style={{ color: "var(--ink)" }}>
-            {nombres[hover]}
+          <div className="text-[10px] uppercase tracking-wider mb-0.5" style={{ color: "var(--ink-faint)" }}>
+            {nombres[hover.i]}
           </div>
-          <div className="flex flex-col gap-0.5">
-            <TooltipRow color="var(--pos)" label="Ingresos" value={format(data[hover].ing)} />
-            <TooltipRow color="var(--neg)" label="Gastos" value={format(data[hover].gas)} />
-            <TooltipRow color="var(--accent)" label="Ahorro" value={format(data[hover].aho)} />
+          <div className="flex items-center gap-2">
+            <span
+              className="inline-block rounded-full"
+              style={{
+                width: 8,
+                height: 8,
+                background: colors[hover.k],
+              }}
+            />
+            <span
+              className="text-xs font-semibold"
+              style={{ color: colors[hover.k] }}
+            >
+              {labels[hover.k]}
+            </span>
+          </div>
+          <div
+            className="mono font-serif text-base font-bold mt-0.5"
+            style={{ color: "var(--ink)" }}
+          >
+            {format(data[hover.i][hover.k])}
           </div>
         </div>
       )}
@@ -537,29 +584,6 @@ function TrendChart({
         <LegendDot color="var(--neg)" label="Gastos" />
         <LegendDot color="var(--accent)" label="Ahorro" />
       </div>
-    </div>
-  );
-}
-
-function TooltipRow({
-  color,
-  label,
-  value,
-}: {
-  color: string;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="flex items-center gap-2 justify-between">
-      <span className="inline-flex items-center gap-1.5" style={{ color: "var(--ink-soft)" }}>
-        <span
-          className="inline-block rounded-full"
-          style={{ width: 8, height: 8, background: color }}
-        />
-        {label}
-      </span>
-      <span className="mono" style={{ color: "var(--ink)" }}>{value}</span>
     </div>
   );
 }

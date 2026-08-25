@@ -2,7 +2,15 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash2, Plus, RefreshCcw, Zap, Check } from "lucide-react";
+import {
+  Pencil,
+  Trash2,
+  Plus,
+  RefreshCcw,
+  Zap,
+  Check,
+  CreditCard,
+} from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useSettings } from "@/components/settings-context";
 import { useToast } from "@/components/toast-provider";
@@ -24,6 +32,9 @@ type Form = {
   monto: string;
   dia: string;
   tipo: MovTipo;
+  esCuota: boolean;
+  cuotas_totales: string;
+  cuotas_pagas: string;
 };
 
 function catsFor(tipo: MovTipo): readonly string[] {
@@ -40,7 +51,16 @@ const empty: Form = {
   monto: "",
   dia: "1",
   tipo: "Gasto",
+  esCuota: false,
+  cuotas_totales: "6",
+  cuotas_pagas: "0",
 };
+
+function esCompleta(f: Fijo) {
+  return (
+    f.cuotas_totales !== null && f.cuotas_pagas >= f.cuotas_totales
+  );
+}
 
 export default function FijosClient({ initial }: { initial: Fijo[] }) {
   const router = useRouter();
@@ -57,6 +77,7 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
   const totales = useMemo(() => {
     const g = { gasto: 0, ingreso: 0, ahorro: 0 };
     for (const f of rows) {
+      if (esCompleta(f)) continue;
       const ars = fixedArs(f, settings.tc_ref);
       if (f.tipo === "Ingreso") g.ingreso += ars;
       else if (f.tipo === "Ahorro") g.ahorro += ars;
@@ -74,6 +95,9 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
       monto: String(f.monto),
       dia: String(f.dia),
       tipo: f.tipo,
+      esCuota: f.cuotas_totales !== null,
+      cuotas_totales: String(f.cuotas_totales ?? "6"),
+      cuotas_pagas: String(f.cuotas_pagas ?? 0),
     });
   }
 
@@ -88,6 +112,24 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
       return toast("Día debe estar entre 1 y 31", "error");
     setSaving(true);
 
+    let cuotas_totales: number | null = null;
+    let cuotas_pagas = 0;
+    if (modal.esCuota) {
+      cuotas_totales = Number(modal.cuotas_totales);
+      cuotas_pagas = Number(modal.cuotas_pagas);
+      if (!Number.isInteger(cuotas_totales) || cuotas_totales < 1)
+        return toast("Cuotas totales inválido", "error");
+      if (
+        !Number.isInteger(cuotas_pagas) ||
+        cuotas_pagas < 0 ||
+        cuotas_pagas > cuotas_totales
+      )
+        return toast(
+          `Cuotas pagas debe estar entre 0 y ${cuotas_totales}`,
+          "error",
+        );
+    }
+
     const payload = {
       concepto: modal.concepto,
       cat: modal.cat,
@@ -95,6 +137,8 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
       monto,
       dia,
       tipo: modal.tipo,
+      cuotas_totales,
+      cuotas_pagas,
     };
 
     if (modal.id) {
@@ -151,6 +195,12 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
 
   /** Genera el movimiento del mes activo para este fijo (si aún no existe). */
   async function materializar(f: Fijo) {
+    if (esCompleta(f)) {
+      return toast(
+        `"${f.concepto}" ya terminó (${f.cuotas_totales} cuotas)`,
+        "info",
+      );
+    }
     setMaterializing(f.id);
     const {
       data: { user },
@@ -181,13 +231,18 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
       "0",
     );
     const fecha = `${settings.mes}-${dia}`;
+    // Sufijo con número de cuota
+    const desc =
+      f.cuotas_totales !== null
+        ? `${f.concepto} · cuota ${f.cuotas_pagas + 1}/${f.cuotas_totales}`
+        : f.concepto;
 
     const { error } = await supabase.from("movimientos").insert({
       user_id: user.id,
       fecha,
       tipo: f.tipo,
       cat: f.cat,
-      descripcion: f.concepto,
+      descripcion: desc,
       mon: f.mon,
       monto: f.monto,
       tc: settings.tc_ref,
@@ -196,9 +251,32 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
       estado: "Confirmado",
       from_fijo: f.id,
     });
+    if (error) {
+      setMaterializing(null);
+      return toast(error.message, "error");
+    }
+
+    // Si es cuota, incrementar el contador
+    if (f.cuotas_totales !== null) {
+      const nuevoPagas = f.cuotas_pagas + 1;
+      const { data: upd } = await supabase
+        .from("fijos")
+        .update({ cuotas_pagas: nuevoPagas })
+        .eq("id", f.id)
+        .select()
+        .single();
+      if (upd) {
+        setRows((rs) => rs.map((r) => (r.id === f.id ? (upd as Fijo) : r)));
+      }
+    }
+
     setMaterializing(null);
-    if (error) return toast(error.message, "error");
-    toast(`Movimiento de "${f.concepto}" cargado en ${settings.mes}`, "success");
+    toast(
+      f.cuotas_totales !== null
+        ? `Cuota ${f.cuotas_pagas + 1}/${f.cuotas_totales} cargada`
+        : `"${f.concepto}" cargado en ${settings.mes}`,
+      "success",
+    );
     router.refresh();
   }
 
@@ -245,11 +323,17 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
             {rows.map((r) => {
               const Icon = iconForCategory(r.cat, r.tipo);
               const col = tipoColor(r.tipo);
+              const completa = esCompleta(r);
+              const esCuota = r.cuotas_totales !== null;
               return (
                 <div
                   key={r.id}
                   className="data-row items-start"
-                  style={{ paddingTop: 14, paddingBottom: 14 }}
+                  style={{
+                    paddingTop: 14,
+                    paddingBottom: 14,
+                    opacity: completa ? 0.55 : 1,
+                  }}
                 >
                   <button
                     className="flex items-center gap-3 flex-1 text-left min-w-0"
@@ -260,12 +344,27 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
                       className="data-row-icon"
                       style={{ background: col.bg, color: col.fg }}
                     >
-                      <Icon size={18} />
+                      {esCuota ? <CreditCard size={18} /> : <Icon size={18} />}
                     </div>
                     <div className="data-row-body">
-                      <div className="data-row-title">{r.concepto}</div>
+                      <div className="data-row-title flex items-center gap-1.5">
+                        {r.concepto}
+                        {esCuota && (
+                          <span
+                            className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                            style={{
+                              background: "var(--surface-2)",
+                              color: "var(--ink-soft)",
+                            }}
+                          >
+                            {r.cuotas_pagas}/{r.cuotas_totales}
+                          </span>
+                        )}
+                      </div>
                       <div className="data-row-sub">
-                        día {r.dia} · {r.tipo.toLowerCase()} · {r.cat}
+                        {completa
+                          ? "completado ✓"
+                          : `día ${r.dia} · ${r.tipo.toLowerCase()} · ${r.cat}`}
                       </div>
                     </div>
                     <div className="data-row-amount" style={{ color: col.fg }}>
@@ -274,19 +373,21 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
                         : fmtARS.format(r.monto)}
                     </div>
                   </button>
-                  <button
-                    onClick={() => materializar(r)}
-                    disabled={materializing === r.id}
-                    className="ml-2 self-center p-2 rounded-lg"
-                    style={{
-                      background: "var(--accent-soft)",
-                      color: "var(--accent-ink)",
-                    }}
-                    aria-label={`Cargar en ${settings.mes}`}
-                    title={`Cargar en ${settings.mes}`}
-                  >
-                    {materializing === r.id ? "…" : <Zap size={16} />}
-                  </button>
+                  {!completa && (
+                    <button
+                      onClick={() => materializar(r)}
+                      disabled={materializing === r.id}
+                      className="ml-2 self-center p-2 rounded-lg"
+                      style={{
+                        background: "var(--accent-soft)",
+                        color: "var(--accent-ink)",
+                      }}
+                      aria-label={`Cargar en ${settings.mes}`}
+                      title={`Cargar en ${settings.mes}`}
+                    >
+                      {materializing === r.id ? "…" : <Zap size={16} />}
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -312,13 +413,45 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
                 {rows.map((r) => {
                   const Icon = iconForCategory(r.cat, r.tipo);
                   const col = tipoColor(r.tipo);
+                  const completa = esCompleta(r);
+                  const esCuota = r.cuotas_totales !== null;
                   return (
                     <tr
                       key={r.id}
-                      style={{ borderTop: "1px solid var(--line)" }}
+                      style={{
+                        borderTop: "1px solid var(--line)",
+                        opacity: completa ? 0.5 : 1,
+                      }}
                     >
                       <td className="px-3 py-2 mono">{r.dia}</td>
-                      <td className="px-3 py-2 font-medium">{r.concepto}</td>
+                      <td className="px-3 py-2 font-medium">
+                        <span className="inline-flex items-center gap-2">
+                          {esCuota && (
+                            <CreditCard
+                              size={13}
+                              style={{ color: "var(--ink-soft)" }}
+                            />
+                          )}
+                          {r.concepto}
+                          {esCuota && (
+                            <span
+                              className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
+                              style={{
+                                background: completa
+                                  ? "var(--pos-soft)"
+                                  : "var(--surface-2)",
+                                color: completa
+                                  ? "var(--pos)"
+                                  : "var(--ink-soft)",
+                              }}
+                            >
+                              {completa
+                                ? `${r.cuotas_totales} ✓`
+                                : `${r.cuotas_pagas}/${r.cuotas_totales}`}
+                            </span>
+                          )}
+                        </span>
+                      </td>
                       <td className="px-3 py-2">
                         <span
                           className="text-xs px-2 py-0.5 rounded-full"
@@ -342,24 +475,26 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
                           : fmtARS.format(r.monto)}
                       </td>
                       <td className="px-3 py-2 text-right whitespace-nowrap">
-                        <button
-                          onClick={() => materializar(r)}
-                          disabled={materializing === r.id}
-                          className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-md mr-2"
-                          style={{
-                            background: "var(--accent-soft)",
-                            color: "var(--accent-ink)",
-                          }}
-                          title={`Cargar en ${settings.mes}`}
-                        >
-                          {materializing === r.id ? (
-                            "…"
-                          ) : (
-                            <>
-                              <Zap size={13} /> Cargar
-                            </>
-                          )}
-                        </button>
+                        {!completa && (
+                          <button
+                            onClick={() => materializar(r)}
+                            disabled={materializing === r.id}
+                            className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-md mr-2"
+                            style={{
+                              background: "var(--accent-soft)",
+                              color: "var(--accent-ink)",
+                            }}
+                            title={`Cargar en ${settings.mes}`}
+                          >
+                            {materializing === r.id ? (
+                              "…"
+                            ) : (
+                              <>
+                                <Zap size={13} /> Cargar
+                              </>
+                            )}
+                          </button>
+                        )}
                         <button
                           onClick={() => openEdit(r)}
                           aria-label="Editar"
@@ -457,7 +592,7 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
                   <option>USD</option>
                 </select>
               </Field>
-              <Field label="Monto">
+              <Field label={modal.esCuota ? "Monto por cuota" : "Monto"}>
                 <input
                   className="input mono"
                   type="number"
@@ -482,6 +617,78 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
                 />
               </Field>
             </div>
+
+            {/* Toggle: es cuota */}
+            <label
+              className="flex items-start gap-3 p-3 rounded-xl cursor-pointer transition"
+              style={{
+                background: modal.esCuota
+                  ? "var(--accent-soft)"
+                  : "var(--surface-2)",
+                border: `1px solid ${modal.esCuota ? "var(--accent)" : "var(--line)"}`,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={modal.esCuota}
+                onChange={(e) =>
+                  setModal({ ...modal, esCuota: e.target.checked })
+                }
+                className="mt-0.5 w-4 h-4 accent-[var(--accent)]"
+              />
+              <div className="flex-1">
+                <div
+                  className="text-sm font-semibold inline-flex items-center gap-1.5"
+                  style={{
+                    color: modal.esCuota ? "var(--accent-ink)" : "var(--ink)",
+                  }}
+                >
+                  <CreditCard size={14} />
+                  Es un plan de cuotas
+                </div>
+                <div
+                  className="text-xs mt-0.5"
+                  style={{
+                    color: modal.esCuota
+                      ? "var(--accent-ink)"
+                      : "var(--ink-faint)",
+                  }}
+                >
+                  Se paga en N meses. Cuando cumple las cuotas se completa.
+                </div>
+              </div>
+            </label>
+
+            {modal.esCuota && (
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Cuotas totales">
+                  <input
+                    className="input mono"
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    value={modal.cuotas_totales}
+                    onChange={(e) =>
+                      setModal({ ...modal, cuotas_totales: e.target.value })
+                    }
+                  />
+                </Field>
+                <Field label="Cuotas ya pagadas">
+                  <input
+                    className="input mono"
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    max={Number(modal.cuotas_totales) || undefined}
+                    value={modal.cuotas_pagas}
+                    onChange={(e) =>
+                      setModal({ ...modal, cuotas_pagas: e.target.value })
+                    }
+                  />
+                </Field>
+              </div>
+            )}
+
             <div className="flex justify-end gap-2 mt-2">
               <button
                 className="btn"

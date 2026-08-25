@@ -105,6 +105,8 @@ export type Database = {
           monto: number;
           dia: number;
           tipo: MovTipo;
+          cuotas_totales: number | null;
+          cuotas_pagas: number;
           created_at: string;
           updated_at: string;
         };
@@ -117,6 +119,8 @@ export type Database = {
           monto: number;
           dia: number;
           tipo?: MovTipo;
+          cuotas_totales?: number | null;
+          cuotas_pagas?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -129,6 +133,8 @@ export type Database = {
           monto?: number;
           dia?: number;
           tipo?: MovTipo;
+          cuotas_totales?: number | null;
+          cuotas_pagas?: number;
           created_at?: string;
           updated_at?: string;
         };
