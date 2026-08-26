@@ -418,31 +418,31 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
         }
       />
 
-      {/* Barra de selección: aparece cuando hay 1+ seleccionados */}
+      {/* Barra de selección: bottom sheet en mobile, sticky arriba en desktop */}
       {selected.size > 0 && (
         <div
-          className="sticky top-[72px] sm:top-[76px] z-20 mb-3 -mx-4 sm:mx-0 px-4 sm:px-4 py-2.5 flex items-center gap-3 shadow-md"
+          className="fixed sm:sticky left-0 right-0 sm:left-auto sm:right-auto bottom-0 sm:bottom-auto sm:top-4 z-30 sm:mb-3 sm:mx-0 px-4 py-2.5 sm:py-2.5 flex items-center gap-2 sm:gap-3 shadow-lg sm:shadow-md sm:rounded-xl"
           style={{
             background: "var(--accent)",
             color: "white",
-            borderRadius: 0,
+            paddingBottom: "calc(10px + env(safe-area-inset-bottom))",
           }}
         >
           <button
             type="button"
             onClick={() => setSelected(new Set())}
-            className="p-1 rounded"
+            className="p-1 rounded shrink-0"
             aria-label="Deseleccionar"
           >
             <X size={18} />
           </button>
-          <div className="flex-1 text-sm font-semibold">
+          <div className="flex-1 text-sm font-semibold min-w-0 truncate">
             {selected.size} seleccionado{selected.size === 1 ? "" : "s"}
           </div>
           <button
             type="button"
             onClick={toggleAll}
-            className="text-xs font-semibold px-2 py-1 rounded"
+            className="text-xs font-semibold px-2 py-1 rounded shrink-0"
             style={{
               background: "rgba(255,255,255,.15)",
             }}
@@ -453,14 +453,19 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
             type="button"
             onClick={cargarSeleccionados}
             disabled={bulkLoading}
-            className="inline-flex items-center gap-1 text-sm font-semibold px-3 py-1.5 rounded"
+            className="inline-flex items-center gap-1 text-sm font-semibold px-3 py-1.5 rounded shrink-0"
             style={{
               background: "white",
               color: "var(--accent-ink)",
             }}
           >
             <Zap size={14} />
-            {bulkLoading ? "Cargando…" : `Cargar en ${settings.mes}`}
+            <span className="hidden sm:inline">
+              {bulkLoading ? "Cargando…" : `Cargar en ${settings.mes}`}
+            </span>
+            <span className="sm:hidden">
+              {bulkLoading ? "…" : "Cargar"}
+            </span>
           </button>
         </div>
       )}

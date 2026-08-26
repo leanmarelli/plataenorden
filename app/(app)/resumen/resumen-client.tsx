@@ -215,7 +215,7 @@ export default function ResumenClient({
   return (
     <div className="flex flex-col gap-6">
       {/* KPIs — clickeables: llevan a la vista correspondiente */}
-      <section className="grid gap-3 grid-cols-2 lg:grid-cols-3">
+      <section className="grid gap-2 sm:gap-3 grid-cols-2 lg:grid-cols-3">
         {kpis.map((k, i) => {
           const s = KPI_STYLES[k.c];
           const Icon = k.Icon;
@@ -223,45 +223,45 @@ export default function ResumenClient({
             <Link
               key={i}
               href={k.href}
-              className="card p-4 flex flex-col gap-1.5 no-underline group transition active:scale-[.98] hover:shadow-md"
+              className="card p-3 sm:p-4 flex flex-col gap-1 sm:gap-1.5 no-underline group transition active:scale-[.98] hover:shadow-md"
               style={{
                 borderLeft: `3px solid ${s.ring}`,
                 color: "inherit",
               }}
             >
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <span
-                  className="text-[11px] sm:text-xs uppercase tracking-wider font-semibold"
+                  className="text-[10px] sm:text-xs uppercase tracking-wider font-semibold leading-tight"
                   style={{ color: "var(--ink-faint)" }}
                 >
                   {k.lab}
                 </span>
                 <span
-                  className="grid place-items-center rounded-lg"
+                  className="grid place-items-center rounded-lg shrink-0"
                   style={{
-                    width: 28,
-                    height: 28,
+                    width: 26,
+                    height: 26,
                     background: s.bg,
                     color: s.fg,
                   }}
                 >
-                  <Icon size={15} strokeWidth={2.2} />
+                  <Icon size={14} strokeWidth={2.2} />
                 </span>
               </div>
               <div
-                className="mono font-serif text-xl sm:text-2xl font-bold"
+                className="mono font-serif text-lg sm:text-2xl font-bold leading-tight"
                 style={{ color: s.fg }}
               >
                 {money(cur, k.a, k.u)}
               </div>
               <div
-                className="text-xs flex items-center justify-between"
+                className="text-[11px] sm:text-xs flex items-center justify-between"
                 style={{ color: "var(--ink-soft)" }}
               >
-                <span>{k.meta}</span>
+                <span className="truncate">{k.meta}</span>
                 <ChevronRight
                   size={14}
-                  className="opacity-0 group-hover:opacity-60 transition"
+                  className="opacity-0 group-hover:opacity-60 transition hidden sm:inline"
                   style={{ color: "var(--ink-faint)" }}
                 />
               </div>

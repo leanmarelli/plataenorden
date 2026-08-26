@@ -227,7 +227,7 @@ export default function EstadisticasClient({
       ) : (
         <div className="flex flex-col gap-6">
           {/* KPIs */}
-          <section className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+          <section className="grid gap-2 sm:gap-3 grid-cols-2 lg:grid-cols-4">
             <Kpi
               Icon={Wallet}
               label="Ingresos"
@@ -261,18 +261,18 @@ export default function EstadisticasClient({
           </section>
 
           {/* Tendencia últimos 6 meses (área) */}
-          <section className="card p-5">
-            <h2 className="text-lg font-serif font-semibold mb-1">
+          <section className="card card-pad">
+            <h2 className="text-base sm:text-lg font-serif font-semibold mb-1">
               Últimos 6 meses
             </h2>
             <p className="text-xs mb-4" style={{ color: "var(--ink-faint)" }}>
               ingresos, gastos y ahorro · valores en {cur}
             </p>
-            <div style={{ width: "100%", height: 260 }}>
+            <div className="chart-h w-full">
               <ResponsiveContainer>
                 <AreaChart
                   data={ult6}
-                  margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                  margin={{ top: 8, right: 4, left: -12, bottom: 0 }}
                 >
                   <defs>
                     <linearGradient id="gIng" x1="0" y1="0" x2="0" y2="1">
@@ -300,10 +300,10 @@ export default function EstadisticasClient({
                     tickLine={false}
                   />
                   <YAxis
-                    tick={{ fill: "var(--ink-faint)", fontSize: 11 }}
+                    tick={{ fill: "var(--ink-faint)", fontSize: 10 }}
                     axisLine={false}
                     tickLine={false}
-                    width={70}
+                    width={56}
                     tickFormatter={(v) => compactFmt(v, cur)}
                   />
                   <Tooltip
@@ -342,9 +342,9 @@ export default function EstadisticasClient({
 
           {/* Fijos vs Variables (Pie) */}
           {fvSplit.tot > 1 && (
-            <section className="card p-5">
-              <div className="flex items-baseline gap-2 mb-1">
-                <h2 className="text-lg font-serif font-semibold mr-auto">
+            <section className="card card-pad">
+              <div className="flex items-baseline gap-2 mb-1 flex-wrap">
+                <h2 className="text-base sm:text-lg font-serif font-semibold mr-auto">
                   Fijos vs Variables
                 </h2>
                 <span
@@ -360,8 +360,8 @@ export default function EstadisticasClient({
               >
                 distribución de gastos del mes
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-[240px_1fr] items-center gap-6">
-                <div style={{ width: "100%", height: 180 }}>
+              <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] items-center gap-4 sm:gap-6">
+                <div className="chart-h-sm w-full">
                   <ResponsiveContainer>
                     <PieChart>
                       <Pie
@@ -404,9 +404,9 @@ export default function EstadisticasClient({
 
           {/* Gastos por categoría (donut + lista) */}
           {gastosPorCat.length > 0 && (
-            <section className="card p-5">
-              <div className="flex items-baseline gap-2 mb-1">
-                <h2 className="text-lg font-serif font-semibold mr-auto">
+            <section className="card card-pad">
+              <div className="flex items-baseline gap-2 mb-1 flex-wrap">
+                <h2 className="text-base sm:text-lg font-serif font-semibold mr-auto">
                   Gastos por categoría
                 </h2>
                 <span className="mono text-sm" style={{ color: "var(--neg)" }}>
@@ -419,8 +419,8 @@ export default function EstadisticasClient({
               >
                 {gastosPorCat.length} categoría{gastosPorCat.length === 1 ? "" : "s"} este mes
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-[240px_1fr] gap-6 items-center">
-                <div style={{ width: "100%", height: 220 }}>
+              <div className="grid grid-cols-1 sm:grid-cols-[220px_1fr] gap-4 sm:gap-6 items-center">
+                <div className="chart-h w-full">
                   <ResponsiveContainer>
                     <PieChart>
                       <Pie
@@ -459,9 +459,9 @@ export default function EstadisticasClient({
 
           {/* Ingresos por categoría (bar horizontal) */}
           {ingresosPorCat.length > 0 && (
-            <section className="card p-5">
-              <div className="flex items-baseline gap-2 mb-1">
-                <h2 className="text-lg font-serif font-semibold mr-auto">
+            <section className="card card-pad">
+              <div className="flex items-baseline gap-2 mb-1 flex-wrap">
+                <h2 className="text-base sm:text-lg font-serif font-semibold mr-auto">
                   Ingresos por categoría
                 </h2>
                 <span className="mono text-sm" style={{ color: "var(--pos)" }}>
@@ -486,9 +486,9 @@ export default function EstadisticasClient({
 
           {/* Ahorro por categoría */}
           {ahorroPorCat.length > 0 && (
-            <section className="card p-5">
-              <div className="flex items-baseline gap-2 mb-1">
-                <h2 className="text-lg font-serif font-semibold mr-auto">
+            <section className="card card-pad">
+              <div className="flex items-baseline gap-2 mb-1 flex-wrap">
+                <h2 className="text-base sm:text-lg font-serif font-semibold mr-auto">
                   Ahorro por categoría
                 </h2>
                 <span
@@ -510,8 +510,8 @@ export default function EstadisticasClient({
 
           {/* Comparativa mes vs anterior */}
           {compara.length > 0 && (
-            <section className="card p-5">
-              <h2 className="text-lg font-serif font-semibold mb-1">
+            <section className="card card-pad overflow-hidden">
+              <h2 className="text-base sm:text-lg font-serif font-semibold mb-1">
                 Este mes vs {MESES_LARGO[new Date(year, month - 2).getMonth()]}
               </h2>
               <p
@@ -520,12 +520,15 @@ export default function EstadisticasClient({
               >
                 top categorías de gasto
               </p>
-              <div style={{ width: "100%", height: 40 * compara.length + 60 }}>
+              <div
+                className="w-full"
+                style={{ height: 44 * compara.length + 60 }}
+              >
                 <ResponsiveContainer>
                   <BarChart
                     data={compara}
                     layout="vertical"
-                    margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
+                    margin={{ top: 5, right: 12, left: 0, bottom: 5 }}
                     barCategoryGap="20%"
                   >
                     <CartesianGrid
@@ -543,10 +546,13 @@ export default function EstadisticasClient({
                     <YAxis
                       type="category"
                       dataKey="cat"
-                      tick={{ fill: "var(--ink-soft)", fontSize: 12 }}
+                      tick={{ fill: "var(--ink-soft)", fontSize: 11 }}
                       axisLine={false}
                       tickLine={false}
-                      width={110}
+                      width={90}
+                      tickFormatter={(v: string) =>
+                        v.length > 12 ? v.slice(0, 11) + "…" : v
+                      }
                     />
                     <Tooltip
                       content={<ChartTooltip fmt={fmt} />}
@@ -600,8 +606,8 @@ export default function EstadisticasClient({
 
           {/* Top 5 movimientos */}
           {topMovs.length > 0 && (
-            <section className="card p-5">
-              <h2 className="text-lg font-serif font-semibold mb-1">
+            <section className="card card-pad">
+              <h2 className="text-base sm:text-lg font-serif font-semibold mb-1">
                 Los 5 gastos más grandes
               </h2>
               <p
@@ -715,44 +721,45 @@ function Kpi({
 
   return (
     <div
-      className="card p-4 flex flex-col gap-1.5"
+      className="card p-3 sm:p-4 flex flex-col gap-1 sm:gap-1.5"
       style={{ borderLeft: `3px solid ${styles.ring}` }}
     >
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <span
-          className="text-[11px] sm:text-xs uppercase tracking-wider font-semibold"
+          className="text-[10px] sm:text-xs uppercase tracking-wider font-semibold leading-tight"
           style={{ color: "var(--ink-faint)" }}
         >
           {label}
         </span>
         <span
-          className="grid place-items-center rounded-lg"
+          className="grid place-items-center rounded-lg shrink-0"
           style={{
-            width: 28,
-            height: 28,
+            width: 26,
+            height: 26,
             background: styles.bg,
             color: styles.fg,
           }}
         >
-          <Icon size={15} strokeWidth={2.2} />
+          <Icon size={14} strokeWidth={2.2} />
         </span>
       </div>
       <div
-        className="mono font-serif text-xl sm:text-2xl font-bold"
+        className="mono font-serif text-lg sm:text-2xl font-bold leading-tight"
         style={{ color: styles.fg }}
       >
         {value}
       </div>
       {delta !== null && delta !== undefined ? (
         <div
-          className="text-xs flex items-center gap-1"
+          className="text-[11px] sm:text-xs flex items-center gap-1"
           style={{ color: goodDelta ? "var(--pos)" : "var(--neg)" }}
         >
-          {deltaPos ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-          {pct(Math.abs(delta))} vs mes anterior
+          {deltaPos ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+          {pct(Math.abs(delta))}
+          <span className="hidden sm:inline">vs mes anterior</span>
         </div>
       ) : sub ? (
-        <div className="text-xs" style={{ color: "var(--ink-soft)" }}>
+        <div className="text-[11px] sm:text-xs" style={{ color: "var(--ink-soft)" }}>
           {sub}
         </div>
       ) : null}

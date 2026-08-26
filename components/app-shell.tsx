@@ -83,12 +83,12 @@ function Header() {
           className="flex items-baseline gap-2 no-underline shrink-0"
         >
           <span
-            className="font-serif text-[18px] sm:text-[22px] font-bold tracking-tight whitespace-nowrap"
+            className="font-serif text-[17px] sm:text-[22px] font-bold tracking-tight whitespace-nowrap"
             style={{ color: "var(--ink)" }}
           >
-            <span className="sm:hidden">Plata</span>
+            <span className="sm:hidden">P.</span>
             <span className="hidden sm:inline">Plata en Orden</span>
-            <span style={{ color: "var(--accent)" }}>.</span>
+            <span style={{ color: "var(--accent)" }} className="hidden sm:inline">.</span>
           </span>
         </Link>
         <div className="flex-1" />

@@ -252,6 +252,34 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   display: none;
 }
 
+/* Card padding responsive: más compacto en mobile */
+.card-pad {
+  padding: 16px;
+}
+@media (min-width: 640px) {
+  .card-pad {
+    padding: 20px;
+  }
+}
+
+/* Chart wrappers con altura responsive */
+.chart-h {
+  height: 220px;
+}
+@media (min-width: 640px) {
+  .chart-h {
+    height: 260px;
+  }
+}
+.chart-h-sm {
+  height: 160px;
+}
+@media (min-width: 640px) {
+  .chart-h-sm {
+    height: 180px;
+  }
+}
+
 /* Card list rows on mobile in place of tables */
 .data-row {
   display: flex;

@@ -157,10 +157,10 @@ export default function MovimientosClient({
         }
       />
 
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 mb-4">
         <div
           className="flex items-center gap-2 input"
-          style={{ padding: "0 12px", flex: "1 1 240px", minWidth: 180 }}
+          style={{ padding: "0 12px", flex: "1 1 240px", minWidth: 0 }}
         >
           <Search size={16} style={{ color: "var(--ink-faint)" }} />
           <input
@@ -172,44 +172,47 @@ export default function MovimientosClient({
             style={{ color: "var(--ink)" }}
           />
         </div>
-        <select
-          value={filtro}
-          onChange={(e) => setFiltro(e.target.value as typeof filtro)}
-          className="input"
-          style={{ width: "auto" }}
-        >
-          <option value="">Todos</option>
-          <option value="Ingreso">Ingresos</option>
-          <option value="Gasto">Gastos</option>
-          <option value="Ahorro">Ahorro</option>
-        </select>
-        <select
-          value={estado}
-          onChange={(e) => setEstado(e.target.value as typeof estado)}
-          className="input"
-          style={{ width: "auto" }}
-        >
-          <option value="">Cualquier estado</option>
-          <option value="Confirmado">Confirmados</option>
-          <option value="Pendiente">Pendientes</option>
-        </select>
-        <button
-          type="button"
-          onClick={() => setTodosMeses((v) => !v)}
-          aria-pressed={todosMeses}
-          className="input"
-          style={{
-            width: "auto",
-            fontSize: 13,
-            fontWeight: 600,
-            background: todosMeses ? "var(--accent-soft)" : "var(--surface)",
-            borderColor: todosMeses ? "var(--accent)" : "var(--line)",
-            color: todosMeses ? "var(--accent-ink)" : "var(--ink)",
-            cursor: "pointer",
-          }}
-        >
-          {todosMeses ? "Todos los meses" : "Solo mes activo"}
-        </button>
+        <div className="grid grid-cols-3 gap-2 sm:contents">
+          <select
+            value={filtro}
+            onChange={(e) => setFiltro(e.target.value as typeof filtro)}
+            className="input"
+            style={{ width: "auto" }}
+          >
+            <option value="">Todos</option>
+            <option value="Ingreso">Ingresos</option>
+            <option value="Gasto">Gastos</option>
+            <option value="Ahorro">Ahorro</option>
+          </select>
+          <select
+            value={estado}
+            onChange={(e) => setEstado(e.target.value as typeof estado)}
+            className="input"
+            style={{ width: "auto" }}
+          >
+            <option value="">Estado</option>
+            <option value="Confirmado">Confirmados</option>
+            <option value="Pendiente">Pendientes</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => setTodosMeses((v) => !v)}
+            aria-pressed={todosMeses}
+            className="input"
+            style={{
+              width: "auto",
+              fontSize: 13,
+              fontWeight: 600,
+              background: todosMeses ? "var(--accent-soft)" : "var(--surface)",
+              borderColor: todosMeses ? "var(--accent)" : "var(--line)",
+              color: todosMeses ? "var(--accent-ink)" : "var(--ink)",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {todosMeses ? "Todos" : "Mes"}
+          </button>
+        </div>
       </div>
 
       {hayFiltro && (
