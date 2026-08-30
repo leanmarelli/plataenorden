@@ -278,7 +278,7 @@ function StepMonto({
   onNext: () => void;
 }) {
   const monto = local.monto;
-  const canContinue = Number(monto) > 0;
+  const canContinue = Number(monto.replace(",", ".")) > 0;
 
   function press(k: string) {
     if (k === "back") {
@@ -303,6 +303,34 @@ function StepMonto({
     if (monto.replace(",", "").replace(".", "").length >= 12) return;
     setLocal({ ...local, monto: monto + k });
   }
+
+  // Soporte de teclado físico (desktop). Los eventos no llegan al NumPad
+  // porque no hay input real enfocado — escuchamos a nivel window.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      // No interferir si el usuario está escribiendo en otro campo del modal
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+      if (e.key >= "0" && e.key <= "9") {
+        e.preventDefault();
+        press(e.key);
+      } else if (e.key === "," || e.key === ".") {
+        e.preventDefault();
+        press(",");
+      } else if (e.key === "Backspace") {
+        e.preventDefault();
+        press("back");
+      } else if (e.key === "Enter" && canContinue) {
+        e.preventDefault();
+        onNext();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monto, canContinue]);
 
   const display = formatDisplay(monto, local.mon);
 
