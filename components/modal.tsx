@@ -142,7 +142,15 @@ export default function Modal({
             <X size={18} />
           </button>
         </div>
-        <div className="px-5 py-4 overflow-y-auto flex-1">{children}</div>
+        <div
+          className="px-5 py-4 overflow-y-auto flex-1"
+          style={{
+            overscrollBehavior: "contain",
+            WebkitOverflowScrolling: "touch",
+          }}
+        >
+          {children}
+        </div>
       </div>
     </div>
   );

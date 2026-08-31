@@ -87,6 +87,31 @@ html {
   -webkit-text-size-adjust: 100%;
   color-scheme: light;
 }
+
+/* Sacar el rectángulo gris del tap en iOS y latencia de 300ms.
+   Aplica global — todos los botones y links se sienten más nativos. */
+button,
+a,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* NumPad: contenedor con touch-action: none para evitar el rubber-band
+   de iOS cuando tapeás rápido las teclas. Feedback por color, no por
+   transform (así no rebota nada). */
+.numpad {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.numpad-key {
+  transition: background 0.08s ease;
+}
+.numpad-key:active {
+  background: var(--accent-soft) !important;
+  color: var(--accent-ink) !important;
+}
 :root[data-theme="dark"],
 :root:not([data-theme="light"]) {
   color-scheme: light;

@@ -438,13 +438,18 @@ function StepMonto({
 function NumPad({ onPress }: { onPress: (k: string) => void }) {
   const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", ",", "0", "back"];
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div className="grid grid-cols-3 gap-2 numpad">
       {keys.map((k) => (
         <button
           key={k}
           type="button"
+          onPointerDown={(e) => {
+            // Evita que el tap propague a padres (scroll, drag del modal) y
+            // no dispare rubber-band de iOS.
+            e.currentTarget.setPointerCapture(e.pointerId);
+          }}
           onClick={() => onPress(k)}
-          className="rounded-xl text-xl font-medium py-3 transition active:scale-95"
+          className="rounded-xl text-xl font-medium py-3 numpad-key"
           style={{
             background: "var(--surface-2)",
             color: "var(--ink)",
