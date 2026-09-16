@@ -10,6 +10,8 @@ import {
   TrendingDown,
   ArrowDown,
   ArrowUp,
+  Target,
+  CalendarClock,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -33,7 +35,7 @@ import EmptyState from "@/components/empty-state";
 import { converter, sumBy } from "@/lib/calc";
 import { fmtARS, fmtUSD, pct } from "@/lib/format";
 import { iconForCategory } from "@/lib/mov-icons";
-import type { Fijo, Movimiento, MovTipo } from "@/types/database";
+import type { Fijo, Meta, Movimiento, MovTipo } from "@/types/database";
 
 const MESES_CORTO = [
   "Ene", "Feb", "Mar", "Abr", "May", "Jun",
@@ -59,9 +61,11 @@ const CAT_COLORS = [
 export default function EstadisticasClient({
   movimientos,
   fijos: _fijos,
+  metas,
 }: {
   movimientos: Movimiento[];
   fijos: Fijo[];
+  metas: Meta[];
 }) {
   const { settings } = useSettings();
   const cur = settings.cur_pref;
@@ -72,6 +76,16 @@ export default function EstadisticasClient({
   /** Convierte cualquier mov a la moneda preferida (ya en la unidad que se muestra). */
   const conv = useMemo(() => converter(cur, tcRef), [cur, tcRef]);
   const fmt = cur === "USD" ? fmtUSD.format : fmtARS.format;
+  /** Convierte un monto suelto (ARS o USD) a la moneda preferida. */
+  const convMonto = useMemo(
+    () =>
+      (monto: number, mon: "ARS" | "USD") => {
+        if (mon === cur) return monto;
+        if (cur === "USD") return monto / tcRef;
+        return monto * tcRef;
+      },
+    [cur, tcRef],
+  );
 
   const prevMes = useMemo(() => {
     const d = new Date(year, month - 2, 1);
@@ -161,6 +175,60 @@ export default function EstadisticasClient({
     );
     return { fij, vari, tot: fij + vari || 1 };
   }, [mmActual, conv]);
+
+  /** Desglose de gasto por categoría, dividido en fijo y variable. */
+  const fvPorCat = useMemo(() => {
+    const fijos: Record<string, number> = {};
+    const vars: Record<string, number> = {};
+    mmActual
+      .filter((x) => x.tipo === "Gasto")
+      .forEach((x) => {
+        const t = x.fv === "Fijo" ? fijos : vars;
+        t[x.cat] = (t[x.cat] || 0) + conv(x);
+      });
+    const toList = (m: Record<string, number>) =>
+      Object.entries(m)
+        .map(([cat, val]) => ({ cat, val }))
+        .sort((a, b) => b.val - a.val);
+    return { fijos: toList(fijos), vars: toList(vars) };
+  }, [mmActual, conv]);
+
+  /* ─────────── Ritmo del mes (promedio + proyección) ─────────── */
+  const ritmo = useMemo(() => {
+    const hoy = new Date();
+    const esMesActual =
+      hoy.getFullYear() === year && hoy.getMonth() + 1 === month;
+    const diasMes = new Date(year, month, 0).getDate();
+    const diasTrans = esMesActual ? hoy.getDate() : diasMes;
+    const prom = kpis.gas / Math.max(diasTrans, 1);
+    const proy = esMesActual ? prom * diasMes : kpis.gas;
+    return { diasMes, diasTrans, prom, proy, esMesActual };
+  }, [kpis.gas, year, month]);
+
+  /* ─────────── Metas ─────────── */
+  const metasProg = useMemo(() => {
+    return metas
+      .map((m) => {
+        const objetivo = convMonto(m.objetivo, m.mon);
+        const ahorrado = convMonto(m.ahorrado, m.mon);
+        const falta = Math.max(0, objetivo - ahorrado);
+        const pctv = objetivo > 0 ? Math.min(1, ahorrado / objetivo) : 0;
+        const doneOn = objetivo > 0 && ahorrado >= objetivo;
+        let diasRestantes: number | null = null;
+        if (m.fecha) {
+          const hoy = new Date();
+          const target = new Date(m.fecha);
+          diasRestantes = Math.ceil(
+            (target.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24),
+          );
+        }
+        return { ...m, objetivo, ahorrado, falta, pctv, doneOn, diasRestantes };
+      })
+      .sort((a, b) => {
+        if (a.doneOn !== b.doneOn) return a.doneOn ? 1 : -1;
+        return b.pctv - a.pctv;
+      });
+  }, [metas, convMonto]);
 
   /* ─────────── Top 5 movimientos ─────────── */
   const topMovs = useMemo(() => {
@@ -340,7 +408,7 @@ export default function EstadisticasClient({
             </div>
           </section>
 
-          {/* Fijos vs Variables (Pie) */}
+          {/* Fijos vs Variables (Pie + desglose por categoría) */}
           {fvSplit.tot > 1 && (
             <section className="card card-pad">
               <div className="flex items-baseline gap-2 mb-1 flex-wrap">
@@ -398,6 +466,157 @@ export default function EstadisticasClient({
                     pctv={fvSplit.vari / fvSplit.tot}
                   />
                 </div>
+              </div>
+
+              {/* Desglose por categoría dentro de cada bloque */}
+              {(fvPorCat.fijos.length > 0 || fvPorCat.vars.length > 0) && (
+                <div
+                  className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 mt-6 pt-5"
+                  style={{ borderTop: "1px solid var(--line)" }}
+                >
+                  <FvBlock
+                    title="Fijos"
+                    color="var(--ars)"
+                    items={fvPorCat.fijos}
+                    total={fvSplit.fij}
+                    fmt={fmt}
+                  />
+                  <FvBlock
+                    title="Variables"
+                    color="var(--accent)"
+                    items={fvPorCat.vars}
+                    total={fvSplit.vari}
+                    fmt={fmt}
+                  />
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Ritmo del mes (promedio diario + proyección) */}
+          {kpis.gas > 0 && (
+            <section className="card card-pad">
+              <h2 className="text-base sm:text-lg font-serif font-semibold mb-1 inline-flex items-center gap-2">
+                <CalendarClock size={18} style={{ color: "var(--ink-soft)" }} />
+                Ritmo del mes
+              </h2>
+              <p className="text-xs mb-4" style={{ color: "var(--ink-faint)" }}>
+                {ritmo.esMesActual
+                  ? `día ${ritmo.diasTrans} de ${ritmo.diasMes} · gasto en ${cur}`
+                  : `mes cerrado · ${ritmo.diasMes} días`}
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <MiniStat
+                  label="Promedio / día"
+                  value={fmt(ritmo.prom)}
+                  color="var(--ink)"
+                />
+                {ritmo.esMesActual && (
+                  <MiniStat
+                    label="Proyección fin de mes"
+                    value={fmt(ritmo.proy)}
+                    color="var(--neg)"
+                  />
+                )}
+                {ritmo.esMesActual && (
+                  <MiniStat
+                    label={`Faltan ${ritmo.diasMes - ritmo.diasTrans} días`}
+                    value={fmt(Math.max(0, ritmo.proy - kpis.gas))}
+                    color="var(--ink-soft)"
+                    sub="a este ritmo"
+                  />
+                )}
+              </div>
+            </section>
+          )}
+
+          {/* Metas: progreso + falta */}
+          {metasProg.length > 0 && (
+            <section className="card card-pad">
+              <div className="flex items-baseline gap-2 mb-1 flex-wrap">
+                <h2 className="text-base sm:text-lg font-serif font-semibold mr-auto inline-flex items-center gap-2">
+                  <Target size={18} style={{ color: "var(--ink-soft)" }} />
+                  Metas
+                </h2>
+                <span
+                  className="mono text-sm"
+                  style={{ color: "var(--ink-soft)" }}
+                >
+                  {metasProg.filter((m) => m.doneOn).length}/{metasProg.length}
+                </span>
+              </div>
+              <p className="text-xs mb-4" style={{ color: "var(--ink-faint)" }}>
+                {metasProg.some((m) => !m.doneOn)
+                  ? "cuánto te falta para cada objetivo"
+                  : "¡todas cumplidas!"}
+              </p>
+              <div className="flex flex-col gap-4">
+                {metasProg.map((m) => (
+                  <div key={m.id} className="flex flex-col gap-1.5 text-sm">
+                    <div className="flex items-baseline gap-3">
+                      <span className="font-medium truncate flex-1 min-w-0">
+                        {m.nombre}
+                        {m.doneOn && (
+                          <span
+                            className="ml-2 text-xs font-normal"
+                            style={{ color: "var(--pos)" }}
+                          >
+                            · cumplida
+                          </span>
+                        )}
+                      </span>
+                      <span className="mono text-xs" style={{ color: "var(--ink-faint)" }}>
+                        {pct(m.pctv)}
+                      </span>
+                    </div>
+                    <span
+                      className="block w-full h-2 rounded-full overflow-hidden"
+                      style={{ background: "var(--surface-2)" }}
+                    >
+                      <span
+                        className="block h-full transition-all"
+                        style={{
+                          width: `${m.pctv * 100}%`,
+                          background: m.doneOn ? "var(--pos)" : "var(--accent)",
+                        }}
+                      />
+                    </span>
+                    <div
+                      className="flex items-center justify-between text-xs flex-wrap gap-x-3"
+                      style={{ color: "var(--ink-soft)" }}
+                    >
+                      <span className="mono">
+                        {fmt(m.ahorrado)} / {fmt(m.objetivo)}
+                      </span>
+                      <span className="inline-flex items-center gap-2">
+                        {!m.doneOn && (
+                          <span>
+                            faltan <span className="mono">{fmt(m.falta)}</span>
+                          </span>
+                        )}
+                        {m.diasRestantes !== null && !m.doneOn && (
+                          <span
+                            style={{
+                              color:
+                                m.diasRestantes < 0
+                                  ? "var(--neg)"
+                                  : m.diasRestantes < 30
+                                    ? "var(--warn)"
+                                    : "var(--ink-faint)",
+                            }}
+                          >
+                            ·{" "}
+                            {m.diasRestantes < 0
+                              ? `vencida hace ${Math.abs(m.diasRestantes)}d`
+                              : m.diasRestantes === 0
+                                ? "vence hoy"
+                                : `${m.diasRestantes}d restantes`}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </section>
           )}
@@ -832,6 +1051,119 @@ function CategoryList({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function FvBlock({
+  title,
+  color,
+  items,
+  total,
+  fmt,
+}: {
+  title: string;
+  color: string;
+  items: { cat: string; val: number }[];
+  total: number;
+  fmt: (n: number) => string;
+}) {
+  if (items.length === 0)
+    return (
+      <div>
+        <div className="flex items-center gap-2 mb-2">
+          <span
+            className="inline-block rounded-full"
+            style={{ width: 8, height: 8, background: color }}
+          />
+          <span className="text-sm font-semibold">{title}</span>
+        </div>
+        <p className="text-xs" style={{ color: "var(--ink-faint)" }}>
+          Sin gastos {title.toLowerCase()} este mes.
+        </p>
+      </div>
+    );
+  const max = items[0]?.val || 1;
+  return (
+    <div>
+      <div className="flex items-baseline gap-2 mb-3">
+        <span
+          className="inline-block rounded-full"
+          style={{ width: 8, height: 8, background: color }}
+        />
+        <span className="text-sm font-semibold mr-auto">{title}</span>
+        <span className="mono text-xs" style={{ color: "var(--ink-soft)" }}>
+          {fmt(total)}
+        </span>
+      </div>
+      <div className="flex flex-col gap-2.5">
+        {items.map((r) => {
+          const Icon = iconForCategory(r.cat, "Gasto");
+          const w = Math.max(3, (r.val / max) * 100);
+          return (
+            <div key={r.cat} className="flex flex-col gap-1 text-xs">
+              <div className="flex items-baseline gap-2">
+                <span
+                  className="inline-flex items-center gap-1.5 truncate flex-1 min-w-0"
+                  style={{ color: "var(--ink-soft)" }}
+                >
+                  <Icon size={12} style={{ color, flexShrink: 0 }} />
+                  <span className="truncate">{r.cat}</span>
+                </span>
+                <span className="mono" style={{ color: "var(--ink)" }}>
+                  {fmt(r.val)}
+                </span>
+              </div>
+              <span
+                className="block w-full h-1 rounded-full overflow-hidden"
+                style={{ background: "var(--surface-2)" }}
+              >
+                <span
+                  className="block h-full"
+                  style={{ width: `${w}%`, background: color }}
+                />
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MiniStat({
+  label,
+  value,
+  color,
+  sub,
+}: {
+  label: string;
+  value: string;
+  color: string;
+  sub?: string;
+}) {
+  return (
+    <div
+      className="rounded-xl p-3 flex flex-col gap-0.5"
+      style={{ background: "var(--surface-2)" }}
+    >
+      <span
+        className="text-[10px] uppercase tracking-wider font-semibold"
+        style={{ color: "var(--ink-faint)" }}
+      >
+        {label}
+      </span>
+      <span
+        className="mono font-serif text-base sm:text-lg font-bold leading-tight"
+        style={{ color }}
+      >
+        {value}
+      </span>
+      {sub && (
+        <span className="text-[10px]" style={{ color: "var(--ink-faint)" }}>
+          {sub}
+        </span>
+      )}
     </div>
   );
 }
