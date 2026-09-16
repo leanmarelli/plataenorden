@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import AppShell from "@/components/app-shell";
-import type { Settings } from "@/types/database";
+import type { Categoria, Settings } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 
@@ -16,13 +16,15 @@ export default async function AppLayout({
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: settings } = await supabase
-    .from("settings")
-    .select("*")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const [{ data: settings }, { data: categorias }] = await Promise.all([
+    supabase
+      .from("settings")
+      .select("*")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    supabase.from("categorias").select("*"),
+  ]);
 
-  // Fallback por si el trigger no creó settings todavía
   const s: Omit<Settings, "user_id" | "updated_at"> = settings
     ? {
         tc_ref: settings.tc_ref,
@@ -38,7 +40,11 @@ export default async function AppLayout({
       };
 
   return (
-    <AppShell settings={s} email={user.email ?? null}>
+    <AppShell
+      settings={s}
+      email={user.email ?? null}
+      categorias={(categorias ?? []) as Categoria[]}
+    >
       {children}
     </AppShell>
   );

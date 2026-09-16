@@ -21,6 +21,12 @@ import {
   Wallet,
   Coins,
   ReceiptText,
+  Gift,
+  Users,
+  HeartHandshake,
+  Trophy,
+  CircleDot,
+  Tag,
   type LucideIcon,
 } from "lucide-react";
 import type { MovTipo } from "@/types/database";
@@ -44,6 +50,11 @@ export function iconForCategory(cat: string, tipo: MovTipo): LucideIcon {
     Impuestos: FileText,
     "Tarjeta de crédito": CreditCard,
     Viaje: Plane,
+    Regalos: Gift,
+    Amigos: Users,
+    Familia: HeartHandshake,
+    Fútbol: Trophy,
+    Pádel: CircleDot,
     "Otro gasto": Package,
     Sueldo: Wallet,
     "Freelance / Honorarios": Coins,
@@ -53,6 +64,8 @@ export function iconForCategory(cat: string, tipo: MovTipo): LucideIcon {
     "Ahorro / Inversión": PiggyBank,
   };
   if (map[cat]) return map[cat];
+  // Categorías custom del usuario: ícono genérico de tag
+  if (tipo === "Gasto") return Tag;
   if (tipo === "Ingreso") return ArrowDownLeft;
   if (tipo === "Ahorro") return PiggyBank;
   return ArrowUpRight;

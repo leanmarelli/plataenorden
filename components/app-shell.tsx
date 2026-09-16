@@ -20,6 +20,8 @@ import {
 import { SettingsProvider, useSettings } from "./settings-context";
 import { ToastProvider } from "./toast-provider";
 import { ConfirmProvider } from "./confirm-provider";
+import { CategoriasProvider } from "./categorias-context";
+import type { Categoria } from "@/types/database";
 import MovimientoDialog, {
   emptyMovForm,
   type MovForm,
@@ -39,27 +41,31 @@ const TABS = [
 
 export default function AppShell({
   settings,
+  categorias,
   children,
 }: {
   settings: Omit<Settings, "user_id" | "updated_at">;
   email: string | null;
+  categorias: Categoria[];
   children: React.ReactNode;
 }) {
   return (
     <ToastProvider>
       <ConfirmProvider>
         <SettingsProvider initial={settings}>
-          <Header />
-          <Tabs />
-          <div
-            className="mx-auto max-w-[1120px] px-4 sm:px-5 pt-4"
-            style={{
-              paddingBottom: "calc(96px + env(safe-area-inset-bottom))",
-            }}
-          >
-            {children}
-          </div>
-          <FAB />
+          <CategoriasProvider initial={categorias}>
+            <Header />
+            <Tabs />
+            <div
+              className="mx-auto max-w-[1120px] px-4 sm:px-5 pt-4"
+              style={{
+                paddingBottom: "calc(96px + env(safe-area-inset-bottom))",
+              }}
+            >
+              {children}
+            </div>
+            <FAB />
+          </CategoriasProvider>
         </SettingsProvider>
       </ConfirmProvider>
     </ToastProvider>

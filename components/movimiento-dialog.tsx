@@ -5,13 +5,10 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, SlidersHorizontal, Check, Delete } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/toast-provider";
+import { useCategorias } from "@/components/categorias-context";
+import CategoriaSelect from "@/components/categoria-select";
 import Modal from "@/components/modal";
-import {
-  CATS_AHORRO,
-  CATS_GASTO,
-  CATS_INGRESO,
-  MEDIOS,
-} from "@/lib/constants";
+import { CATS_GASTO, MEDIOS } from "@/lib/constants";
 import { fmtARS, fmtUSD2 } from "@/lib/format";
 import type {
   FijoVar,
@@ -70,10 +67,12 @@ export function movFormFrom(r: Movimiento, defaultTc: number): MovForm {
   };
 }
 
-function catsFor(tipo: MovTipo): readonly string[] {
-  if (tipo === "Ingreso") return CATS_INGRESO;
-  if (tipo === "Ahorro") return CATS_AHORRO;
-  return CATS_GASTO;
+// Devuelve la primera categoría del tipo, incluyendo custom del usuario.
+function firstCatOf(
+  tipo: MovTipo,
+  getCategorias: (t: MovTipo) => string[],
+): string {
+  return getCategorias(tipo)[0] ?? CATS_GASTO[0];
 }
 
 type Step = "monto" | "detalles" | "avanzado";
@@ -277,6 +276,7 @@ function StepMonto({
   setLocal: (f: MovForm) => void;
   onNext: () => void;
 }) {
+  const { getCategorias } = useCategorias();
   const monto = local.monto;
   const canContinue = Number(monto.replace(",", ".")) > 0;
 
@@ -357,7 +357,11 @@ function StepMonto({
               key={t}
               type="button"
               onClick={() =>
-                setLocal({ ...local, tipo: t, cat: catsFor(t)[0] })
+                setLocal({
+                  ...local,
+                  tipo: t,
+                  cat: firstCatOf(t, getCategorias),
+                })
               }
               className="py-2.5 text-sm font-semibold rounded-[9px] transition"
               style={{
@@ -530,15 +534,11 @@ function StepDetalles({
       </div>
 
       <Field label="Categoría">
-        <select
-          className="input"
+        <CategoriaSelect
+          tipo={local.tipo}
           value={local.cat}
-          onChange={(e) => setLocal({ ...local, cat: e.target.value })}
-        >
-          {catsFor(local.tipo).map((c) => (
-            <option key={c}>{c}</option>
-          ))}
-        </select>
+          onChange={(cat) => setLocal({ ...local, cat })}
+        />
       </Field>
       <Field label="Descripción">
         <input
@@ -597,6 +597,7 @@ function StepAvanzado({
   onSave: () => void;
   saving: boolean;
 }) {
+  const { getCategorias } = useCategorias();
   return (
     <div className="flex flex-col gap-3">
       {onBack && (
@@ -627,7 +628,11 @@ function StepAvanzado({
                   key={t}
                   type="button"
                   onClick={() =>
-                    setLocal({ ...local, tipo: t, cat: catsFor(t)[0] })
+                    setLocal({
+                      ...local,
+                      tipo: t,
+                      cat: firstCatOf(t, getCategorias),
+                    })
                   }
                   className="py-2 text-sm font-semibold rounded-[7px] transition"
                   style={{
@@ -667,15 +672,11 @@ function StepAvanzado({
             </Field>
           </div>
           <Field label="Categoría">
-            <select
-              className="input"
+            <CategoriaSelect
+              tipo={local.tipo}
               value={local.cat}
-              onChange={(e) => setLocal({ ...local, cat: e.target.value })}
-            >
-              {catsFor(local.tipo).map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
+              onChange={(cat) => setLocal({ ...local, cat })}
+            />
           </Field>
           <Field label="Descripción">
             <input

@@ -15,6 +15,11 @@ export const CATS_GASTO = [
   "Impuestos",
   "Tarjeta de crédito",
   "Viaje",
+  "Regalos",
+  "Amigos",
+  "Familia",
+  "Fútbol",
+  "Pádel",
   "Otro gasto",
 ] as const;
 

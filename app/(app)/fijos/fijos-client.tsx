@@ -19,7 +19,9 @@ import { useConfirm } from "@/components/confirm-provider";
 import PageHeader from "@/components/page-header";
 import EmptyState from "@/components/empty-state";
 import Modal from "@/components/modal";
-import { CATS_AHORRO, CATS_GASTO, CATS_INGRESO } from "@/lib/constants";
+import { CATS_GASTO } from "@/lib/constants";
+import { useCategorias } from "@/components/categorias-context";
+import CategoriaSelect from "@/components/categoria-select";
 import { fixedArs } from "@/lib/calc";
 import { fmtARS, fmtUSD2 } from "@/lib/format";
 import { iconForCategory } from "@/lib/mov-icons";
@@ -38,10 +40,11 @@ type Form = {
   cuotas_pagas: string;
 };
 
-function catsFor(tipo: MovTipo): readonly string[] {
-  if (tipo === "Ingreso") return CATS_INGRESO;
-  if (tipo === "Ahorro") return CATS_AHORRO;
-  return CATS_GASTO;
+function firstCatOf(
+  tipo: MovTipo,
+  getCategorias: (t: MovTipo) => string[],
+): string {
+  return getCategorias(tipo)[0] ?? CATS_GASTO[0];
 }
 
 const empty: Form = {
@@ -72,6 +75,7 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
   const supabase = createSupabaseBrowserClient();
   const { toast } = useToast();
   const confirm = useConfirm();
+  const { getCategorias } = useCategorias();
 
   const [rows, setRows] = useState<Fijo[]>(initial);
   const [modal, setModal] = useState<Form | null>(null);
@@ -750,7 +754,11 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
                       key={t}
                       type="button"
                       onClick={() =>
-                        setModal({ ...modal, tipo: t, cat: catsFor(t)[0] })
+                        setModal({
+                          ...modal,
+                          tipo: t,
+                          cat: firstCatOf(t, getCategorias),
+                        })
                       }
                       className="py-2 text-sm font-semibold rounded-[7px] transition"
                       style={{
@@ -776,15 +784,11 @@ export default function FijosClient({ initial }: { initial: Fijo[] }) {
               />
             </Field>
             <Field label="Categoría">
-              <select
-                className="input"
+              <CategoriaSelect
+                tipo={modal.tipo}
                 value={modal.cat}
-                onChange={(e) => setModal({ ...modal, cat: e.target.value })}
-              >
-                {catsFor(modal.tipo).map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </select>
+                onChange={(cat) => setModal({ ...modal, cat })}
+              />
             </Field>
             <div className="grid grid-cols-3 gap-3">
               <Field label="Moneda">

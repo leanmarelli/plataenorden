@@ -212,6 +212,30 @@ export type Database = {
         };
         Relationships: [];
       };
+      categorias: {
+        Row: {
+          id: string;
+          user_id: string;
+          nombre: string;
+          tipo: MovTipo;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          nombre: string;
+          tipo?: MovTipo;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          nombre?: string;
+          tipo?: MovTipo;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       conversiones: {
         Row: {
           id: string;
@@ -272,3 +296,4 @@ export type Fijo = Database["public"]["Tables"]["fijos"]["Row"];
 export type Meta = Database["public"]["Tables"]["metas"]["Row"];
 export type Viaje = Database["public"]["Tables"]["viajes"]["Row"];
 export type Conversion = Database["public"]["Tables"]["conversiones"]["Row"];
+export type Categoria = Database["public"]["Tables"]["categorias"]["Row"];
