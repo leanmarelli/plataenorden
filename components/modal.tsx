@@ -22,19 +22,44 @@ export default function Modal({
   const startY = useRef(0);
   const isMobile = useIsMobile();
 
-  // Escape + bloquear scroll del body
+  // Escape + scroll lock robusto (iOS-safe). El overflow:hidden solo no
+  // detiene el bounce nativo de iOS; hay que fijar el body con position
+  // fixed + top para congelar el scroll sin que rebote al tocar el modal.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const prev = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      width: body.style.width,
+      overflow: body.style.overflow,
+    };
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+    body.style.overflow = "hidden";
+
     const t = setTimeout(() => setMounted(true), 10);
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
+      body.style.position = prev.position;
+      body.style.top = prev.top;
+      body.style.left = prev.left;
+      body.style.right = prev.right;
+      body.style.width = prev.width;
+      body.style.overflow = prev.overflow;
+      // Restaurar el scroll donde estaba
+      window.scrollTo(0, scrollY);
       clearTimeout(t);
       setMounted(false);
       setDragY(0);
