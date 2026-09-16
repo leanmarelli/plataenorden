@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, SlidersHorizontal, Check, Delete } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -444,30 +444,57 @@ function NumPad({ onPress }: { onPress: (k: string) => void }) {
   return (
     <div className="grid grid-cols-3 gap-2 numpad">
       {keys.map((k) => (
-        <button
-          key={k}
-          type="button"
-          onPointerDown={(e) => {
-            // Evita que el tap propague a padres (scroll, drag del modal) y
-            // no dispare rubber-band de iOS.
-            e.currentTarget.setPointerCapture(e.pointerId);
-          }}
-          onClick={() => onPress(k)}
-          className="rounded-xl text-xl font-medium py-3 numpad-key"
-          style={{
-            background: "var(--surface-2)",
-            color: "var(--ink)",
-            border: "1px solid var(--line)",
-          }}
-        >
-          {k === "back" ? (
-            <Delete size={20} style={{ margin: "0 auto" }} />
-          ) : (
-            k
-          )}
-        </button>
+        <NumPadKey key={k} k={k} onPress={onPress} />
       ))}
     </div>
+  );
+}
+
+/**
+ * Tecla del NumPad. Bloquea el rebote de iOS a nivel `touchstart`:
+ *  - preventDefault() en touchstart evita que Safari inicie ninguna
+ *    gestura (scroll, zoom, drag) y no rebote el modal.
+ *  - Ejecutamos la acción en touchstart (feedback inmediato, sin delay
+ *    de 300ms del click sintético).
+ *  - onClick queda solo para desktop / teclado (donde touchstart no
+ *    dispara, así no hay doble ejecución).
+ */
+function NumPadKey({
+  k,
+  onPress,
+}: {
+  k: string;
+  onPress: (k: string) => void;
+}) {
+  const touched = useRef(false);
+  return (
+    <button
+      type="button"
+      onTouchStart={(e) => {
+        e.preventDefault();
+        touched.current = true;
+        onPress(k);
+      }}
+      onClick={() => {
+        if (touched.current) {
+          touched.current = false;
+          return;
+        }
+        onPress(k);
+      }}
+      className="rounded-xl text-xl font-medium py-3 numpad-key"
+      style={{
+        background: "var(--surface-2)",
+        color: "var(--ink)",
+        border: "1px solid var(--line)",
+      }}
+    >
+      {k === "back" ? (
+        <Delete size={20} style={{ margin: "0 auto" }} />
+      ) : (
+        k
+      )}
+    </button>
   );
 }
 
