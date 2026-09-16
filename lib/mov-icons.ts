@@ -31,6 +31,25 @@ import {
 } from "lucide-react";
 import type { MovTipo } from "@/types/database";
 
+/** Paleta rotativa usada en Estadísticas y en el selector de categorías. */
+export const CAT_COLORS = [
+  "var(--neg)",
+  "var(--accent)",
+  "var(--ars)",
+  "var(--warn)",
+  "var(--pos)",
+  "#8b5cf6",
+  "#ec4899",
+  "#06b6d4",
+] as const;
+
+/** Devuelve el color asignado a una categoría dentro de una lista ordenada. */
+export function colorForCategory(cat: string, cats: readonly string[]): string {
+  const idx = cats.indexOf(cat);
+  if (idx < 0) return CAT_COLORS[0];
+  return CAT_COLORS[idx % CAT_COLORS.length];
+}
+
 /** Devuelve un ícono representativo según la categoría del movimiento. */
 export function iconForCategory(cat: string, tipo: MovTipo): LucideIcon {
   const map: Record<string, LucideIcon> = {

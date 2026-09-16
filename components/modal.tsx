@@ -34,13 +34,17 @@ export default function Modal({
 
     const scrollY = window.scrollY;
     const body = document.body;
+    const html = document.documentElement;
     const prev = {
-      position: body.style.position,
-      top: body.style.top,
-      left: body.style.left,
-      right: body.style.right,
-      width: body.style.width,
-      overflow: body.style.overflow,
+      bodyPosition: body.style.position,
+      bodyTop: body.style.top,
+      bodyLeft: body.style.left,
+      bodyRight: body.style.right,
+      bodyWidth: body.style.width,
+      bodyOverflow: body.style.overflow,
+      bodyTouchAction: body.style.touchAction,
+      htmlOverflow: html.style.overflow,
+      htmlOverscroll: html.style.overscrollBehavior,
     };
     body.style.position = "fixed";
     body.style.top = `-${scrollY}px`;
@@ -48,16 +52,22 @@ export default function Modal({
     body.style.right = "0";
     body.style.width = "100%";
     body.style.overflow = "hidden";
+    body.style.touchAction = "none";
+    html.style.overflow = "hidden";
+    html.style.overscrollBehavior = "none";
 
     const t = setTimeout(() => setMounted(true), 10);
     return () => {
       document.removeEventListener("keydown", onKey);
-      body.style.position = prev.position;
-      body.style.top = prev.top;
-      body.style.left = prev.left;
-      body.style.right = prev.right;
-      body.style.width = prev.width;
-      body.style.overflow = prev.overflow;
+      body.style.position = prev.bodyPosition;
+      body.style.top = prev.bodyTop;
+      body.style.left = prev.bodyLeft;
+      body.style.right = prev.bodyRight;
+      body.style.width = prev.bodyWidth;
+      body.style.overflow = prev.bodyOverflow;
+      body.style.touchAction = prev.bodyTouchAction;
+      html.style.overflow = prev.htmlOverflow;
+      html.style.overscrollBehavior = prev.htmlOverscroll;
       // Restaurar el scroll donde estaba
       window.scrollTo(0, scrollY);
       clearTimeout(t);
@@ -170,8 +180,9 @@ export default function Modal({
         <div
           className="px-5 py-4 overflow-y-auto flex-1"
           style={{
-            overscrollBehavior: "contain",
-            WebkitOverflowScrolling: "touch",
+            // none es más estricto que contain — corta el rubber-band
+            // de iOS cuando el contenido no llega a scrollear.
+            overscrollBehavior: "none",
           }}
         >
           {children}

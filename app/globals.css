@@ -104,9 +104,15 @@ a,
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
+  overscroll-behavior: contain;
 }
 .numpad-key {
   transition: background 0.08s ease;
+  /* pisa el touch-action:manipulation global de <button> — con none,
+     iOS ya no dispara el bounce/pan gesture al tocar la tecla. */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .numpad-key:active {
   background: var(--accent-soft) !important;

@@ -34,7 +34,7 @@ import PageHeader from "@/components/page-header";
 import EmptyState from "@/components/empty-state";
 import { converter, sumBy } from "@/lib/calc";
 import { fmtARS, fmtUSD, pct } from "@/lib/format";
-import { iconForCategory } from "@/lib/mov-icons";
+import { CAT_COLORS, iconForCategory } from "@/lib/mov-icons";
 import type { Fijo, Meta, Movimiento, MovTipo } from "@/types/database";
 
 const MESES_CORTO = [
@@ -44,18 +44,6 @@ const MESES_CORTO = [
 const MESES_LARGO = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
-];
-
-/** Paleta rotativa para gráficos multi-serie. */
-const CAT_COLORS = [
-  "var(--neg)",
-  "var(--accent)",
-  "var(--ars)",
-  "var(--warn)",
-  "var(--pos)",
-  "#8b5cf6",
-  "#ec4899",
-  "#06b6d4",
 ];
 
 export default function EstadisticasClient({
