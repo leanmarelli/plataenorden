@@ -160,7 +160,7 @@ export default function MovimientosClient({
       <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 mb-4">
         <div
           className="flex items-center gap-2 input"
-          style={{ padding: "0 12px", flex: "1 1 240px", minWidth: 0 }}
+          style={{ flex: "1 1 240px", minWidth: 0 }}
         >
           <Search size={16} style={{ color: "var(--ink-faint)" }} />
           <input
@@ -168,8 +168,8 @@ export default function MovimientosClient({
             placeholder="Buscar…"
             value={busq}
             onChange={(e) => setBusq(e.target.value)}
-            className="w-full bg-transparent border-0 outline-none py-2"
-            style={{ color: "var(--ink)" }}
+            className="w-full bg-transparent border-0 outline-none"
+            style={{ color: "var(--ink)", padding: 0, margin: 0, height: "auto", lineHeight: 1.4 }}
           />
         </div>
         <div className="grid grid-cols-3 gap-2 sm:contents">
