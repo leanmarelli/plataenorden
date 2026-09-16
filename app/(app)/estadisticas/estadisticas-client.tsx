@@ -328,6 +328,61 @@ export default function EstadisticasClient({
             />
           </section>
 
+          {/* Gastos por categoría (donut + lista) */}
+          {gastosPorCat.length > 0 && (
+            <section className="card card-pad">
+              <div className="flex items-baseline gap-2 mb-1 flex-wrap">
+                <h2 className="text-base sm:text-lg font-serif font-semibold mr-auto">
+                  Gastos por categoría
+                </h2>
+                <span className="mono text-sm" style={{ color: "var(--neg)" }}>
+                  {fmt(kpis.gas)}
+                </span>
+              </div>
+              <p
+                className="text-xs mb-4"
+                style={{ color: "var(--ink-faint)" }}
+              >
+                {gastosPorCat.length} categoría{gastosPorCat.length === 1 ? "" : "s"} este mes
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-[220px_1fr] gap-4 sm:gap-6 items-center">
+                <div className="chart-h w-full">
+                  <ResponsiveContainer>
+                    <PieChart>
+                      <Pie
+                        data={gastosPorCat.map((c, i) => ({
+                          name: c.cat,
+                          value: c.val,
+                          color: CAT_COLORS[i % CAT_COLORS.length],
+                        }))}
+                        dataKey="value"
+                        innerRadius={55}
+                        outerRadius={90}
+                        paddingAngle={2}
+                        stroke="var(--surface)"
+                      >
+                        {gastosPorCat.map((_, i) => (
+                          <Cell
+                            key={i}
+                            fill={CAT_COLORS[i % CAT_COLORS.length]}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<ChartTooltip fmt={fmt} single />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <CategoryList
+                  items={gastosPorCat}
+                  total={kpis.gas}
+                  format={fmt}
+                  tipo="Gasto"
+                  colored
+                />
+              </div>
+            </section>
+          )}
+
           {/* Tendencia últimos 6 meses (área) */}
           <section className="card card-pad">
             <h2 className="text-base sm:text-lg font-serif font-semibold mb-1">
@@ -621,60 +676,6 @@ export default function EstadisticasClient({
             </section>
           )}
 
-          {/* Gastos por categoría (donut + lista) */}
-          {gastosPorCat.length > 0 && (
-            <section className="card card-pad">
-              <div className="flex items-baseline gap-2 mb-1 flex-wrap">
-                <h2 className="text-base sm:text-lg font-serif font-semibold mr-auto">
-                  Gastos por categoría
-                </h2>
-                <span className="mono text-sm" style={{ color: "var(--neg)" }}>
-                  {fmt(kpis.gas)}
-                </span>
-              </div>
-              <p
-                className="text-xs mb-4"
-                style={{ color: "var(--ink-faint)" }}
-              >
-                {gastosPorCat.length} categoría{gastosPorCat.length === 1 ? "" : "s"} este mes
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-[220px_1fr] gap-4 sm:gap-6 items-center">
-                <div className="chart-h w-full">
-                  <ResponsiveContainer>
-                    <PieChart>
-                      <Pie
-                        data={gastosPorCat.map((c, i) => ({
-                          name: c.cat,
-                          value: c.val,
-                          color: CAT_COLORS[i % CAT_COLORS.length],
-                        }))}
-                        dataKey="value"
-                        innerRadius={55}
-                        outerRadius={90}
-                        paddingAngle={2}
-                        stroke="var(--surface)"
-                      >
-                        {gastosPorCat.map((_, i) => (
-                          <Cell
-                            key={i}
-                            fill={CAT_COLORS[i % CAT_COLORS.length]}
-                          />
-                        ))}
-                      </Pie>
-                      <Tooltip content={<ChartTooltip fmt={fmt} single />} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-                <CategoryList
-                  items={gastosPorCat}
-                  total={kpis.gas}
-                  format={fmt}
-                  tipo="Gasto"
-                  colored
-                />
-              </div>
-            </section>
-          )}
 
           {/* Ingresos por categoría (bar horizontal) */}
           {ingresosPorCat.length > 0 && (
