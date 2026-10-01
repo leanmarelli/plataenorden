@@ -16,11 +16,15 @@ import {
   Plane,
   ArrowLeftRight,
   BarChart3,
+  Settings as SettingsIcon,
+  LogOut,
+  User,
 } from "lucide-react";
 import { SettingsProvider, useSettings } from "./settings-context";
 import { ToastProvider } from "./toast-provider";
 import { ConfirmProvider } from "./confirm-provider";
 import { CategoriasProvider } from "./categorias-context";
+import Modal from "./modal";
 import type { Categoria } from "@/types/database";
 import MovimientoDialog, {
   emptyMovForm,
@@ -41,6 +45,7 @@ const TABS = [
 
 export default function AppShell({
   settings,
+  email,
   categorias,
   children,
 }: {
@@ -54,7 +59,7 @@ export default function AppShell({
       <ConfirmProvider>
         <SettingsProvider initial={settings}>
           <CategoriasProvider initial={categorias}>
-            <Header />
+            <Header email={email} />
             <Tabs />
             <div
               className="mx-auto max-w-[1120px] px-4 sm:px-5 pt-4"
@@ -72,7 +77,7 @@ export default function AppShell({
   );
 }
 
-function Header() {
+function Header({ email }: { email: string | null }) {
   const { settings, updateSettings } = useSettings();
   return (
     <header
@@ -83,7 +88,7 @@ function Header() {
         paddingTop: "env(safe-area-inset-top)",
       }}
     >
-      <div className="mx-auto max-w-[1120px] px-3 sm:px-5 py-3 flex items-center gap-1.5 sm:gap-3">
+      <div className="mx-auto max-w-[1120px] px-3 sm:px-5 py-3 flex items-center gap-2 sm:gap-3">
         <Link
           href="/resumen"
           className="flex items-baseline gap-2 no-underline shrink-0"
@@ -98,24 +103,20 @@ function Header() {
           </span>
         </Link>
         <div className="flex-1" />
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-
-        <MesPopover
-          value={settings.mes}
-          onChange={(mes) => updateSettings({ mes })}
-        />
-        <TcInput
-          value={settings.tc_ref}
-          onChange={(tc_ref) => updateSettings({ tc_ref })}
-        />
-        <CurToggle
-          value={settings.cur_pref}
-          onChange={(cur_pref) => updateSettings({ cur_pref })}
-        />
-        <ThemeToggle
-          value={settings.theme}
-          onChange={(theme) => updateSettings({ theme })}
-        />
+        <div className="flex items-center gap-2 shrink-0">
+          <MesPicker
+            value={settings.mes}
+            onChange={(mes) => updateSettings({ mes })}
+          />
+          <UserMenu
+            email={email}
+            tc={settings.tc_ref}
+            cur={settings.cur_pref}
+            theme={settings.theme}
+            onTc={(tc_ref) => updateSettings({ tc_ref })}
+            onCur={(cur_pref) => updateSettings({ cur_pref })}
+            onTheme={(theme) => updateSettings({ theme })}
+          />
         </div>
       </div>
     </header>
@@ -158,21 +159,37 @@ function Tabs() {
   );
 }
 
-/* ─────────── Popover base ─────────── */
+/* ─────────── Hook: detectar mobile (sm breakpoint) ─────────── */
+function useIsMobile() {
+  const [is, setIs] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 639px)");
+    setIs(mq.matches);
+    const on = (e: MediaQueryListEvent) => setIs(e.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return is;
+}
+
+/* ─────────── Popover desktop + bottom sheet mobile ─────────── */
 function Popover({
   trigger,
+  title,
   children,
   align = "right",
 }: {
   trigger: (open: boolean) => React.ReactNode;
+  title: string;
   children: (close: () => void) => React.ReactNode;
   align?: "left" | "right";
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || isMobile) return;
     const onClick = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false);
@@ -187,7 +204,9 @@ function Popover({
       document.removeEventListener("mousedown", onClick);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, isMobile]);
+
+  const close = () => setOpen(false);
 
   return (
     <div className="relative" ref={ref}>
@@ -205,23 +224,30 @@ function Popover({
       >
         {trigger(open)}
       </button>
-      {open && (
+      {/* Desktop: popover absoluto */}
+      {open && !isMobile && (
         <div
           className="absolute z-40 mt-2 card p-3"
           style={{
-            minWidth: 240,
+            minWidth: 260,
             [align === "right" ? "right" : "left"]: 0,
           }}
         >
-          {children(() => setOpen(false))}
+          {children(close)}
         </div>
+      )}
+      {/* Mobile: bottom sheet */}
+      {isMobile && (
+        <Modal open={open} onClose={close} title={title}>
+          {children(close)}
+        </Modal>
       )}
     </div>
   );
 }
 
-/* ─────────── Mes popover ─────────── */
-function MesPopover({
+/* ─────────── Mes picker ─────────── */
+function MesPicker({
   value,
   onChange,
 }: {
@@ -237,6 +263,7 @@ function MesPopover({
 
   return (
     <Popover
+      title="Elegir mes"
       trigger={() => (
         <>
           <Calendar size={14} />
@@ -282,28 +309,36 @@ function YearMonthGrid({
   ];
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-3">
         <button
           type="button"
           onClick={() => onYearChange(year - 1)}
-          className="w-8 h-8 grid place-items-center rounded-lg"
-          style={{ color: "var(--ink-soft)" }}
+          className="w-9 h-9 grid place-items-center rounded-lg transition"
+          style={{
+            color: "var(--ink-soft)",
+            background: "var(--surface-2)",
+            border: "1px solid var(--line)",
+          }}
           aria-label="Año anterior"
         >
           ‹
         </button>
-        <div className="font-serif font-semibold">{year}</div>
+        <div className="font-serif font-semibold text-lg">{year}</div>
         <button
           type="button"
           onClick={() => onYearChange(year + 1)}
-          className="w-8 h-8 grid place-items-center rounded-lg"
-          style={{ color: "var(--ink-soft)" }}
+          className="w-9 h-9 grid place-items-center rounded-lg transition"
+          style={{
+            color: "var(--ink-soft)",
+            background: "var(--surface-2)",
+            border: "1px solid var(--line)",
+          }}
           aria-label="Año siguiente"
         >
           ›
         </button>
       </div>
-      <div className="grid grid-cols-3 gap-1">
+      <div className="grid grid-cols-3 gap-2">
         {months.map((m, i) => {
           const key = `${year}-${String(i + 1).padStart(2, "0")}`;
           const isSel = key === selected;
@@ -313,9 +348,10 @@ function YearMonthGrid({
               key={m}
               type="button"
               onClick={() => onPick(key)}
-              className="px-2 py-1.5 text-sm rounded-lg transition"
+              className="py-2.5 text-sm rounded-lg transition"
               style={{
-                background: isSel ? "var(--accent)" : "transparent",
+                background: isSel ? "var(--accent)" : "var(--surface-2)",
+                border: `1px solid ${isSel ? "var(--accent)" : "var(--line)"}`,
                 color: isSel
                   ? "white"
                   : isNow
@@ -333,8 +369,94 @@ function YearMonthGrid({
   );
 }
 
-/* ─────────── TC inline input ─────────── */
-function TcInput({
+/* ─────────── User menu (TC + moneda + tema + cerrar sesión) ─────────── */
+function UserMenu({
+  email,
+  tc,
+  cur,
+  theme,
+  onTc,
+  onCur,
+  onTheme,
+}: {
+  email: string | null;
+  tc: number;
+  cur: "ARS" | "USD";
+  theme: "light" | "dark" | "system";
+  onTc: (tc: number) => void;
+  onCur: (c: "ARS" | "USD") => void;
+  onTheme: (t: "light" | "dark") => void;
+}) {
+  return (
+    <Popover
+      title="Ajustes"
+      trigger={(open) => (
+        <>
+          <SettingsIcon size={16} strokeWidth={open ? 2.4 : 2} />
+          <span className="hidden sm:inline">Ajustes</span>
+        </>
+      )}
+    >
+      {() => (
+        <div className="flex flex-col gap-4">
+          {email && (
+            <div className="flex items-center gap-3 pb-3" style={{ borderBottom: "1px solid var(--line)" }}>
+              <span
+                className="grid place-items-center rounded-full shrink-0"
+                style={{
+                  width: 36,
+                  height: 36,
+                  background: "var(--accent-soft)",
+                  color: "var(--accent-ink)",
+                }}
+              >
+                <User size={16} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs" style={{ color: "var(--ink-faint)" }}>
+                  Sesión iniciada
+                </div>
+                <div className="text-sm font-medium truncate">{email}</div>
+              </div>
+            </div>
+          )}
+
+          <section className="flex flex-col gap-2">
+            <div className="label">Tipo de cambio (ARS por USD)</div>
+            <TcField value={tc} onChange={onTc} />
+          </section>
+
+          <section className="flex flex-col gap-2">
+            <div className="label">Moneda preferida</div>
+            <CurToggle value={cur} onChange={onCur} />
+          </section>
+
+          <section className="flex flex-col gap-2">
+            <div className="label">Tema</div>
+            <ThemePicker value={theme} onChange={onTheme} />
+          </section>
+
+          <form action="/auth/signout" method="post" className="pt-3" style={{ borderTop: "1px solid var(--line)" }}>
+            <button
+              type="submit"
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition"
+              style={{
+                background: "var(--neg-soft)",
+                color: "var(--neg)",
+                border: "1px solid var(--neg-soft)",
+              }}
+            >
+              <LogOut size={15} /> Cerrar sesión
+            </button>
+          </form>
+        </div>
+      )}
+    </Popover>
+  );
+}
+
+/* ─────────── TC input dentro del menú ─────────── */
+function TcField({
   value,
   onChange,
 }: {
@@ -344,13 +466,10 @@ function TcInput({
   const [draft, setDraft] = useState(String(value));
   const [focused, setFocused] = useState(false);
 
-  // Sincronizar cuando el valor cambia desde afuera (otro dispositivo)
   useEffect(() => {
     if (!focused) setDraft(String(value));
   }, [value, focused]);
 
-  // Debounce mientras el usuario tipea — commit sin esperar blur, así los
-  // cálculos del Resumen se refrescan en vivo.
   useEffect(() => {
     if (!focused) return;
     const t = setTimeout(() => {
@@ -368,15 +487,14 @@ function TcInput({
 
   return (
     <label
-      className="h-9 flex items-center gap-1 rounded-[10px] px-2.5 sm:px-3 transition"
+      className="flex items-center gap-2 rounded-[10px] px-3 py-2 transition"
       style={{
-        background: focused ? "var(--accent-soft)" : "var(--surface)",
+        background: focused ? "var(--accent-soft)" : "var(--surface-2)",
         border: `1px solid ${focused ? "var(--accent)" : "var(--line)"}`,
         color: focused ? "var(--accent-ink)" : "var(--ink)",
-        boxShadow: "var(--shadow)",
       }}
     >
-      <DollarSign size={14} />
+      <DollarSign size={15} />
       <input
         type="text"
         inputMode="numeric"
@@ -394,15 +512,14 @@ function TcInput({
         onKeyDown={(e) => {
           if (e.key === "Enter") (e.target as HTMLInputElement).blur();
         }}
-        className="mono bg-transparent border-0 outline-none text-[13px] sm:text-sm font-medium text-left p-0 m-0"
-        style={{ color: "inherit", width: "5ch", minWidth: 0 }}
-        aria-label="Tipo de cambio de referencia (ARS por USD)"
+        className="mono bg-transparent border-0 outline-none text-sm font-medium flex-1 p-0 m-0"
+        style={{ color: "inherit", minWidth: 0 }}
+        aria-label="Tipo de cambio de referencia"
       />
     </label>
   );
 }
 
-/* ─────────── ARS/USD toggle ─────────── */
 function CurToggle({
   value,
   onChange,
@@ -412,11 +529,10 @@ function CurToggle({
 }) {
   return (
     <div
-      className="inline-flex rounded-[10px] p-[3px]"
+      className="grid grid-cols-2 rounded-[10px] p-[3px] gap-[2px]"
       style={{
         background: "var(--surface-2)",
         border: "1px solid var(--line)",
-        height: 36,
       }}
     >
       {(["ARS", "USD"] as const).map((c) => (
@@ -424,7 +540,7 @@ function CurToggle({
           key={c}
           onClick={() => onChange(c)}
           aria-pressed={value === c}
-          className="px-3 text-xs font-bold rounded-[7px] transition"
+          className="py-2 text-sm font-bold rounded-[7px] transition"
           style={{
             background: value === c ? "var(--surface)" : "transparent",
             color: value === c ? "var(--ink)" : "var(--ink-soft)",
@@ -438,35 +554,45 @@ function CurToggle({
   );
 }
 
-/* ─────────── Theme toggle: solo claro/oscuro ─────────── */
-function ThemeToggle({
+function ThemePicker({
   value,
   onChange,
 }: {
   value: "light" | "dark" | "system";
   onChange: (v: "light" | "dark") => void;
 }) {
-  // Si estaba en 'system', lo tratamos como light para el primer toggle
-  const isDark = value === "dark";
-  const next = isDark ? "light" : "dark";
-  const Icon = isDark ? Sun : Moon;
+  const current: "light" | "dark" = value === "dark" ? "dark" : "light";
   return (
-    <button
-      onClick={() => onChange(next)}
-      title={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-      aria-label={isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}
-      className="grid place-items-center rounded-[10px]"
+    <div
+      className="grid grid-cols-2 rounded-[10px] p-[3px] gap-[2px]"
       style={{
-        width: 36,
-        height: 36,
-        background: "var(--surface)",
+        background: "var(--surface-2)",
         border: "1px solid var(--line)",
-        color: "var(--ink-soft)",
-        boxShadow: "var(--shadow)",
       }}
     >
-      <Icon size={16} />
-    </button>
+      {([
+        { v: "light" as const, Icon: Sun, label: "Claro" },
+        { v: "dark" as const, Icon: Moon, label: "Oscuro" },
+      ]).map(({ v, Icon, label }) => {
+        const active = current === v;
+        return (
+          <button
+            key={v}
+            onClick={() => onChange(v)}
+            aria-pressed={active}
+            className="flex items-center justify-center gap-1.5 py-2 text-sm font-semibold rounded-[7px] transition"
+            style={{
+              background: active ? "var(--surface)" : "transparent",
+              color: active ? "var(--ink)" : "var(--ink-soft)",
+              boxShadow: active ? "var(--shadow)" : "none",
+            }}
+          >
+            <Icon size={15} />
+            {label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

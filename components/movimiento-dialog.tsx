@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, SlidersHorizontal, Check, Delete } from "lucide-react";
+import { ChevronLeft, SlidersHorizontal, Check, Delete, ClipboardPaste } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/toast-provider";
 import { useCategorias } from "@/components/categorias-context";
@@ -92,7 +92,6 @@ export default function MovimientoDialog({
   const [local, setLocal] = useState<MovForm | null>(form);
   const [saving, setSaving] = useState(false);
   const [step, setStep] = useState<Step>("monto");
-
   // Reset local + step cuando llega un nuevo form (open)
   useEffect(() => {
     setLocal(form);
@@ -277,6 +276,7 @@ function StepMonto({
   onNext: () => void;
 }) {
   const { getCategorias } = useCategorias();
+  const { toast } = useToast();
   const monto = local.monto;
   const canContinue = Number(monto.replace(",", ".")) > 0;
 
@@ -302,6 +302,26 @@ function StepMonto({
     // límite razonable
     if (monto.replace(",", "").replace(".", "").length >= 12) return;
     setLocal({ ...local, monto: monto + k });
+  }
+
+  /** Lee el portapapeles y extrae el primer número que encuentre. */
+  async function pegar() {
+    try {
+      if (!navigator.clipboard?.readText) {
+        toast("Tu navegador no permite leer el portapapeles", "error");
+        return;
+      }
+      const raw = await navigator.clipboard.readText();
+      const parsed = parsePastedAmount(raw);
+      if (parsed === null) {
+        toast("No encontré un número para pegar", "error");
+        return;
+      }
+      setLocal({ ...local, monto: parsed });
+      toast(`Pegado: ${parsed.replace(".", ",")}`, "success");
+    } catch {
+      toast("No pude leer el portapapeles", "error");
+    }
   }
 
   // Soporte de teclado físico (desktop). Los eventos no llegan al NumPad
@@ -422,6 +442,21 @@ function StepMonto({
             );
           })}
         </div>
+
+        {/* Botón pegar desde el portapapeles */}
+        <button
+          type="button"
+          onClick={pegar}
+          className="inline-flex items-center gap-1.5 mt-3 text-xs font-semibold rounded-[8px] px-2.5 py-1 transition"
+          style={{
+            color: "var(--ink-soft)",
+            background: "var(--surface-2)",
+            border: "1px solid var(--line)",
+          }}
+        >
+          <ClipboardPaste size={13} />
+          Pegar
+        </button>
       </div>
 
       {/* Teclado numérico custom (solo en mobile la usarían mucho, pero se muestra siempre) */}
@@ -506,6 +541,50 @@ function formatDisplay(monto: string, cur: Moneda): string {
   const entFmt = new Intl.NumberFormat("es-AR").format(entNum);
   if (monto.includes(",")) return `${symbol} ${entFmt},${dec ?? ""}`;
   return `${symbol} ${entFmt}`;
+}
+
+/**
+ * Extrae un monto del texto del portapapeles. Admite formatos con y sin
+ * separadores de miles ("$1.234,56", "US$ 1,234.56", "1234.56", "1.234").
+ * Devuelve el monto en el formato interno del wizard (coma decimal, sin
+ * miles) o null si no logra parsearlo.
+ */
+function parsePastedAmount(raw: string): string | null {
+  if (!raw) return null;
+  // Primer "token" que parezca número; soporta signos monetarios adyacentes
+  const match = raw.match(/-?[\d.,]+/);
+  if (!match) return null;
+  let s = match[0];
+  // Si tiene ambos separadores, el último es decimal; el otro, miles.
+  const hasComma = s.includes(",");
+  const hasDot = s.includes(".");
+  if (hasComma && hasDot) {
+    const lastComma = s.lastIndexOf(",");
+    const lastDot = s.lastIndexOf(".");
+    if (lastComma > lastDot) {
+      // 1.234,56 → 1234,56
+      s = s.replace(/\./g, "");
+    } else {
+      // 1,234.56 → 1234.56 → 1234,56
+      s = s.replace(/,/g, "").replace(".", ",");
+    }
+  } else if (hasDot) {
+    // Puede ser "1.234" (miles) o "12.34" (decimal). Heurística: si hay
+    // exactamente un punto y vienen 1-2 dígitos después, es decimal.
+    const parts = s.split(".");
+    if (parts.length === 2 && parts[1].length <= 2) {
+      s = s.replace(".", ",");
+    } else {
+      s = s.replace(/\./g, "");
+    }
+  }
+  // Chequeo final: debe ser parseable como número.
+  const n = Number(s.replace(",", "."));
+  if (!Number.isFinite(n) || n < 0) return null;
+  // Trim leading zeros excepto el inicial de "0," para no romper formato.
+  s = s.replace(/^0+(?=\d)/, "");
+  if (s === "") s = "0";
+  return s;
 }
 
 /* ─────────── STEP 2 — DETALLES ─────────── */
