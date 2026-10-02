@@ -72,6 +72,11 @@ export default function LoginForm() {
           typeof window !== "undefined"
             ? `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`
             : undefined,
+        // Fuerza el chooser de cuenta de Google — si no, Google reusa
+        // la última cuenta usada aunque hagas signOut en Supabase.
+        queryParams: {
+          prompt: "select_account",
+        },
       },
     });
     if (error) setError(traducirError(error.message));

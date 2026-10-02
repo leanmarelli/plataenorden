@@ -14,7 +14,6 @@ import {
   RefreshCcw,
   Target,
   Plane,
-  ArrowLeftRight,
   BarChart3,
   Settings as SettingsIcon,
   LogOut,
@@ -40,7 +39,6 @@ const TABS = [
   { href: "/fijos", label: "Fijos", icon: RefreshCcw },
   { href: "/metas", label: "Metas", icon: Target },
   { href: "/viajes", label: "Viajes", icon: Plane },
-  { href: "/conversiones", label: "Conversiones", icon: ArrowLeftRight },
 ] as const;
 
 export default function AppShell({
@@ -391,10 +389,7 @@ function UserMenu({
     <Popover
       title="Ajustes"
       trigger={(open) => (
-        <>
-          <SettingsIcon size={16} strokeWidth={open ? 2.4 : 2} />
-          <span className="hidden sm:inline">Ajustes</span>
-        </>
+        <SettingsIcon size={16} strokeWidth={open ? 2.4 : 2} />
       )}
     >
       {() => (

@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Plata en Orden",
     short_name: "Plata",
     description:
-      "Finanzas personales en pesos y dólares: gastos, ahorro, viajes y conversiones, con sync en la nube.",
+      "Finanzas personales en pesos y dólares: gastos, ahorro y viajes, con sync en la nube.",
     start_url: "/resumen",
     display: "standalone",
     orientation: "portrait",

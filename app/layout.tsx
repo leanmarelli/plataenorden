@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Plata en Orden",
   description:
-    "Finanzas personales en pesos y dólares: gastos, ahorro, viajes y conversiones, con sync en la nube.",
+    "Finanzas personales en pesos y dólares: gastos, ahorro y viajes, con sync en la nube.",
   applicationName: "Plata en Orden",
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml" }],

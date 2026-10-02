@@ -101,7 +101,7 @@ export default function MovimientoDialog({
 
   async function save(desde: Step) {
     if (!local) return;
-    const monto = Number(local.monto);
+    const monto = Number(local.monto.replace(",", "."));
     if (!Number.isFinite(monto) || monto <= 0) {
       toast("Ingresá un monto", "error");
       setStep("monto");
